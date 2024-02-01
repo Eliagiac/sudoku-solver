@@ -46,6 +46,8 @@ class Sudoku:
 	# 2D array indexed by [row][column].
 	grid = []
 
+	total_tries = 0
+
 	def __init__(self, rows, square_size):
 		self.square_size = square_size
 		self.num_digits = square_size ** 2
@@ -98,11 +100,23 @@ class Sudoku:
 	def get_all(self):
 		return self.get_rows() + self.get_columns() + self.get_squares()
 
+	# Checks whether any row/column/square contains two or more of the same number, except for 0.
+	def is_valid(self):
+		for sequence in self.get_all():
+			if any(sequence.count(n) > 1 for n in range(1, self.num_digits + 1)):
+				return False
+
+		return True
+
 	def solve(self):
-		tries = 0
+		self.total_tries = 0
 		while any(cell.is_empty() for row in self.grid for cell in row):
-			tries += 1
-			if tries >= max_tries:
+			if not self.is_valid():
+				print("Error occurred while solving.")
+				return False
+
+			self.total_tries += 1
+			if self.total_tries >= max_tries:
 				return False
 
 			print_grid(self.grid)
@@ -150,7 +164,7 @@ class Sudoku:
 		size = self.square_size
 		in_same_row = n in self.get_row(row_index)
 		in_same_column = n in self.get_column(column_index)
-		in_same_square = n in self.get_square((row_index // size)*size + (column_index % size))
+		in_same_square = n in self.get_square((row_index // size)*size + (column_index // size))
 
 		return not in_same_row and not in_same_column and not in_same_square
 
@@ -207,10 +221,12 @@ test_rows = [
 	 [0, 2, 0, 4],
 	 [1, 4, 0, 2],
 	 [2, 3, 4, 1]],
+
 	[[0, 1, 4, 0],
 	 [0, 4, 0, 1],
 	 [0, 3, 0, 2],
 	 [0, 0, 0, 0]],
+
 	[[3, 8, 6, 0, 0, 0, 2, 4, 5],
 	 [0, 2, 0, 3, 5, 6, 8, 0, 0],
 	 [0, 7, 0, 0, 8, 0, 0, 1, 0],
@@ -219,11 +235,22 @@ test_rows = [
 	 [1, 0, 7, 2, 0, 0, 0, 5, 4],
 	 [7, 0, 0, 0, 4, 1, 5, 2, 0],
 	 [0, 0, 2, 5, 7, 0, 4, 0, 8],
-	 [0, 5, 0, 6, 2, 9, 7, 0, 0]]]
+	 [0, 5, 0, 6, 2, 9, 7, 0, 0]],
 
-test = Sudoku(test_rows[1], 2)
+	[[0, 0, 0, 0, 8, 0, 0, 0, 9],
+	 [0, 0, 0, 0, 0, 1, 6, 2, 0],
+	 [0, 9, 2, 0, 0, 6, 4, 7, 0],
+	 [6, 0, 0, 1, 0, 0, 0, 9, 0],
+	 [4, 5, 0, 0, 3, 0, 0, 6, 1],
+	 [0, 1, 0, 0, 0, 5, 0, 0, 7],
+	 [0, 8, 7, 4, 0, 0, 1, 3, 0],
+	 [0, 2, 6, 8, 0, 0, 0, 0, 0],
+	 [9, 0, 0, 0, 6, 0, 0, 0, 0]]]
+
+test = Sudoku(test_rows[3], 3)
 solved = test.solve()
 
 print()
 print("Solved!" if solved else "Not solved.")
 print_grid(test.grid)
+print(f"{test.total_tries} steps. Result is {'valid' if test.is_valid() else 'invalid'}.")
