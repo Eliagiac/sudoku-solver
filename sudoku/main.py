@@ -3,8 +3,8 @@ max_tries = 1000
 extra_spaces = 1
 
 
-# Each cell also stores its position in the cells array (indexed by [row][column])
-class Cell:
+# Each square also stores its position in the squares array (indexed by [row][column])
+class Square:
 	pos = []
 	n = 0
 
@@ -15,11 +15,11 @@ class Cell:
 	def __str__(self):
 		return str(self.n)
 
-	# For simplicity, equality between a Cell and an int is supported
+	# For simplicity, equality between a square and an int is supported
 	def __eq__(self, other):
 		if type(other) is int:
 			return other == self.n
-		if type(other) is Cell:
+		if type(other) is Square:
 			return other.n == self.n
 
 		return False
@@ -34,17 +34,19 @@ class Cell:
 		return self.n == 0
 
 
-def empty_cells(sequence):
-	empty_cells = []
-	for cell in sequence:
-		if cell.n == 0:
-			empty_cells.append(cell.pos)
-	return empty_cells
+def empty_squares(sequence):
+	empty_squares = []
+	for square in sequence:
+		if square.n == 0:
+			empty_squares.append(square.pos)
+	return empty_squares
 
 
 class Sudoku:
 	box_size = 0
-	num_digits = 0
+	grid_size = 0
+	
+	all_possible_numbers = []
 
 	initial_rows = []
 
@@ -52,27 +54,30 @@ class Sudoku:
 	grid = []
 
 	total_tries = 0
+	max_difficulty = 0
 
 	def __init__(self, rows, box_size):
 		self.box_size = box_size
-		self.num_digits = box_size ** 2
+		self.grid_size = box_size ** 2
+		
+		self.all_possible_numbers = range(1, self.grid_size + 1)
 
 		self.initial_rows = rows
 
 		for row_index, row in enumerate(rows):
-			self.grid.append([Cell([row_index, cell_index], n) for cell_index, n in enumerate(row)])
+			self.grid.append([Square([row_index, square_index], n) for square_index, n in enumerate(row)])
 
-	def set_cell(self, row_index, column_index, n):
-		self.grid[row_index][column_index] = Cell([row_index, column_index], n)
+	def set_square(self, row_index, column_index, n):
+		self.grid[row_index][column_index] = Square([row_index, column_index], n)
 
-	# Returns a list of coordinates for all cells in the row.
+	# Returns a list of coordinates for all squares in the row.
 	# Indexed by [X; Y]
 	# X: row index; Y: column index
 	def get_coordinates_by_row(self, i):
-		return [[i, j] for j in range(self.num_digits)]
+		return [[i, j] for j in range(self.grid_size)]
 
 	def get_coordinates_by_column(self, i):
-		return [[j, i] for j in range(self.num_digits)]
+		return [[j, i] for j in range(self.grid_size)]
 
 	def get_coordinates_by_box(self, i):
 		size = self.box_size
@@ -92,30 +97,30 @@ class Sudoku:
 		return [self.grid[x][y] for [x, y] in self.get_coordinates_by_box(i)]
 
 	def get_rows(self):
-		return [self.get_row(i) for i in range(self.num_digits)]
+		return [self.get_row(i) for i in range(self.grid_size)]
 
 	def get_columns(self):
-		return [self.get_column(i) for i in range(self.num_digits)]
+		return [self.get_column(i) for i in range(self.grid_size)]
 
 	def get_boxs(self):
-		return [self.get_box(i) for i in range(self.num_digits)]
+		return [self.get_box(i) for i in range(self.grid_size)]
 
 	# Returns a list of all rows, columns and boxs.
-	# Each item is a row/column/box, and contains a sequence of cells.
-	def get_all(self):
+	# Each item is a row/column/box, and contains a sequence of squares.
+	def get_all_sequences(self):
 		return self.get_rows() + self.get_columns() + self.get_boxs()
 
 	# Checks whether any row/column/box contains two or more of the same number, except for 0.
 	def is_valid(self):
-		for sequence in self.get_all():
-			if any(sequence.count(n) > 1 for n in range(1, self.num_digits + 1)):
+		for sequence in self.get_all_sequences():
+			if any(sequence.count(n) > 1 for n in self.all_possible_numbers):
 				return False
 
 		return True
 
 	def solve(self):
 		self.total_tries = 0
-		while any(cell.is_empty() for row in self.grid for cell in row):
+		while any(square.is_empty() for row in self.grid for square in row):
 			if not self.is_valid():
 				print("Error occurred while solving.")
 				return False
@@ -126,41 +131,54 @@ class Sudoku:
 
 			print_grid(self.grid)
 
-			if self.fill_missing_single():
+			# Fill squares that are the only empty square in a row/column/box.
+			if self.fill_single_empty_squares():
+				self.max_difficulty = max(self.max_difficulty, 1)
+				print("Difficulty: 1")
 				continue
 
-			if self.fill_single_possible():
+			# Fill squares that are the only possible square where a digit could go in a row/column/box.
+			if self.fill_single_possible_squares():
+				self.max_difficulty = max(self.max_difficulty, 2)
+				print("Difficulty: 2")
+				continue
+			
+			# Fill squares that have only one candidate number (all other numbers are already in the same row/column/box)
+			if self.fill_squares_with_one_candidate():
+				self.max_difficulty = max(self.max_difficulty, 3)
+				print("Difficulty: 3")
 				continue
 
 			return False
 
+		print_grid(self.grid)
 		return True
 
-	def fill_missing_single(self):
-		for sequence in self.get_all():
+	def fill_single_empty_squares(self):
+		for sequence in self.get_all_sequences():
 			i = missing_single_index(sequence)
 
 			if i != -1:
 				pos = sequence[i].pos
 
-				self.set_cell(pos[0], pos[1], self.first_missing_digit(sequence))
+				self.set_square(pos[0], pos[1], self.first_missing_digit(sequence))
 				return True
 
 		return False
 
-	def first_missing_digit(self, cells):
+	def first_missing_digit(self, squares):
 		missing_digit = 0
-		for digit in range(1, self.num_digits + 1):
-			if digit not in cells:
+		for digit in self.all_possible_numbers:
+			if digit not in squares:
 				missing_digit = digit
 				break
 
 		return missing_digit
 
-	def missing_digits(self, cells):
+	def missing_digits(self, squares):
 		missing_digits = []
-		for digit in range(1, self.num_digits + 1):
-			if digit not in cells:
+		for digit in self.all_possible_numbers:
+			if digit not in squares:
 				missing_digits.append(digit)
 
 		return missing_digits
@@ -173,35 +191,48 @@ class Sudoku:
 
 		return not in_same_row and not in_same_column and not in_same_box
 
-	def possible_cells(self, sequence, n):
-		possible_cells = []
-		for pos in empty_cells(sequence):
+	def possible_squares(self, sequence, n):
+		possible_squares = []
+		for pos in empty_squares(sequence):
 			if self.could_contain(pos[0], pos[1], n):
-				possible_cells.append(pos)
+				possible_squares.append(pos)
 
-		return possible_cells
+		return possible_squares
 
-	def fill_single_possible(self):
-		for sequence in self.get_all():
+	def fill_single_possible_squares(self):
+		for sequence in self.get_all_sequences():
 			missing_digits = self.missing_digits(sequence)
 			for n in missing_digits:
-				possible_cells = self.possible_cells(sequence, n)
-				if len(possible_cells) == 1:
-					pos = possible_cells[0]
+				possible_squares = self.possible_squares(sequence, n)
+				if len(possible_squares) == 1:
+					pos = possible_squares[0]
 					if pos[0] == 0 and pos[1] == 0 and n == 3:
 						print("!")
 
-					self.set_cell(pos[0], pos[1], n)
+					self.set_square(pos[0], pos[1], n)
 					return True
+
+		return False
+	
+	def fill_squares_with_one_candidate(self):
+		for pos in empty_squares([square for row in self.get_rows() for square in row]):
+			possible_numbers = []
+			for n in self.all_possible_numbers:
+				if self.could_contain(pos[0], pos[1], n):
+					possible_numbers.append(n)
+
+			if len(possible_numbers) == 1:
+				self.set_square(pos[0], pos[1], possible_numbers[0])
+				return True
 
 		return False
 
 
-def missing_single_index(cells):
+def missing_single_index(squares):
 	missing_single_index = -1
 	empty_count = 0
-	for i, cell in enumerate(cells):
-		if cell.n == 0:
+	for i, square in enumerate(squares):
+		if square.n == 0:
 			empty_count += 1
 			missing_single_index = i
 
@@ -217,18 +248,18 @@ def print_grid(grid):
 
 	for row in grid:
 		line = ""
-		for cell in row:
-			number_length = len(str(cell))
+		for square in row:
+			number_length = len(str(square))
 			line += " " * ((max_number_length - number_length) + extra_spaces)
 
-			line += str(cell) + " "
+			line += str(square) + " "
 
 		print(line)
 
 	print()
 
 
-test_rows = [
+sudoku_rows = [
 	[[4, 1, 2, 0],
 	 [0, 2, 0, 4],
 	 [1, 4, 0, 2],
@@ -297,10 +328,11 @@ test_rows = [
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
 
-test = Sudoku(test_rows[5], 3)
-solved = test.solve()
+sudoku = Sudoku(sudoku_rows[6], 4)
+solved = sudoku.solve()
 
 print()
 print("Solved!" if solved else "Not solved.")
-print_grid(test.grid)
-print(f"{test.total_tries} steps. Result is {'valid' if test.is_valid() else 'invalid'}.")
+print(f"{sudoku.total_tries} steps.")
+print(f"Result is {'valid' if sudoku.is_valid() else 'invalid'}.")
+print(f"Max difficulty: {sudoku.max_difficulty}")
