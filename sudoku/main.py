@@ -50,8 +50,9 @@ class Sudoku:
 
 	initial_rows = []
 
-	# 2D array indexed by [row][column].
+	# 2D arrays indexed by [row][column].
 	grid = []
+	candidates = []
 
 	total_tries = 0
 	max_difficulty = 0
@@ -142,11 +143,24 @@ class Sudoku:
 				self.max_difficulty = max(self.max_difficulty, 2)
 				print("Difficulty: 2")
 				continue
+
+			self.compute_candidates()
 			
 			# Fill squares that have only one candidate number (all other numbers are already in the same row/column/box)
 			if self.fill_squares_with_one_candidate():
 				self.max_difficulty = max(self.max_difficulty, 3)
 				print("Difficulty: 3")
+				continue
+
+			groups_count = self.create_groups_with_same_candidates()
+			if groups_count != 0:
+				self.max_difficulty = max(self.max_difficulty, 4)
+				print(f"Created {groups_count} groups.")
+
+			# Fill squares that have only one candidate after groups have been formed
+			if self.fill_squares_with_one_candidate():
+				self.max_difficulty = max(self.max_difficulty, 3)
+				print("Difficulty: 4")
 				continue
 
 			return False
@@ -213,19 +227,55 @@ class Sudoku:
 					return True
 
 		return False
+
+	# Note: this function always stores the candidates in order from lowest to highest.
+	def compute_candidates(self):
+		# Populate the candidates grid with empty lists of candidates on each row.
+		self.candidates = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
+
+		for pos in empty_squares([square for row in self.get_rows() for square in row]):
+			for n in self.all_possible_numbers:
+				if self.could_contain(pos[0], pos[1], n):
+					self.candidates[pos[0]][pos[1]].append(n)
 	
 	def fill_squares_with_one_candidate(self):
 		for pos in empty_squares([square for row in self.get_rows() for square in row]):
-			possible_numbers = []
-			for n in self.all_possible_numbers:
-				if self.could_contain(pos[0], pos[1], n):
-					possible_numbers.append(n)
+			candidates = self.candidates[pos[0]][pos[1]]
 
-			if len(possible_numbers) == 1:
-				self.set_square(pos[0], pos[1], possible_numbers[0])
+			if len(candidates) == 1:
+				self.set_square(pos[0], pos[1], candidates[0])
 				return True
 
 		return False
+
+	# If [0, 0] and [0, 1] definitely contain either a 1 or a 2, no other squares in the first row and the first box
+	# can have a 1 or a 2. For this to be true, the number of squares affected must equal the amount of numbers used.
+	def create_groups_with_same_candidates(self):
+		groups_count = 0
+
+		for sequence in self.get_all_sequences():
+			positions = empty_squares(sequence)
+			for i, pos in enumerate(positions):
+				candidates = self.candidates[pos[0]][pos[1]]
+				group = [pos]
+
+				for other_pos in positions[i+1:]:
+					other_candidates = self.candidates[other_pos[0]][other_pos[1]]
+
+					if other_candidates == candidates:
+						group.append(other_pos)
+
+				# If there's as many items in the group as there are candidates in each square,
+				# we've exhausted the locations these numbers could go in.
+				if len(group) == len(candidates):
+					groups_count += 1
+
+					for other_pos in positions:
+						for candidate in candidates:
+							if candidate in self.candidates[other_pos[0]][other_pos[1]]:
+								self.candidates[other_pos[0]][other_pos[1]].remove(candidate)
+
+		return groups_count
 
 
 def missing_single_index(squares):
@@ -328,7 +378,7 @@ sudoku_rows = [
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
 
-sudoku = Sudoku(sudoku_rows[6], 4)
+sudoku = Sudoku(sudoku_rows[5], 3)
 solved = sudoku.solve()
 
 print()
