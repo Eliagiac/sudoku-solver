@@ -113,6 +113,10 @@ class Sudoku(QObject):
 	grid = []
 	candidates = []
 
+	# Stores the grid state after each step.
+	steps = []
+	steps_differences = []
+
 	total_tries = 0
 	max_difficulty = 0
 
@@ -130,8 +134,8 @@ class Sudoku(QObject):
 		for row_index, row in enumerate(rows):
 			self.grid.append([Square([row_index, square_index], n) for square_index, n in enumerate(row)])
 
-	def set_square(self, row_index, column_index, n):
-		self.grid[row_index][column_index] = Square([row_index, column_index], n)
+	def set_square(self, pos, n):
+		self.grid[pos[0]][pos[1]] = Square([pos[0], pos[1]], n)
 
 	# Returns a list of coordinates for all squares in the row.
 	# Indexed by [X; Y]
@@ -198,6 +202,7 @@ class Sudoku(QObject):
 				return False
 
 			print_grid(self.grid)
+			self.steps.append(self.grid.copy())
 			self.step_done.emit()
 
 			if pause_between_steps:
@@ -246,7 +251,8 @@ class Sudoku(QObject):
 			if i != -1:
 				pos = sequence[i].pos
 
-				self.set_square(pos[0], pos[1], self.first_missing_digit(sequence))
+				self.set_square(pos, self.first_missing_digit(sequence))
+				self.steps_differences.append(pos)
 				return True
 
 		return False
@@ -294,7 +300,8 @@ class Sudoku(QObject):
 					if pos[0] == 0 and pos[1] == 0 and n == 3:
 						print("!")
 
-					self.set_square(pos[0], pos[1], n)
+					self.set_square(pos, n)
+					self.steps_differences.append(pos)
 					return True
 
 		return False
@@ -314,7 +321,8 @@ class Sudoku(QObject):
 			candidates = self.candidates[pos[0]][pos[1]]
 
 			if len(candidates) == 1:
-				self.set_square(pos[0], pos[1], candidates[0])
+				self.set_square(pos, candidates[0])
+				self.steps_differences.append(pos)
 				return True
 
 		return False
@@ -401,10 +409,14 @@ def update_grid_layout():
 			label = QLabel(str(sudoku.grid[i][j]))
 			label.setFont(QFont('Times', 12))
 			label.setAlignment(Qt.AlignCenter)
+
+			if len(sudoku.steps_differences) > 0 and sudoku.steps_differences[-1] == [i, j]:
+				label.setStyleSheet("QLabel { background-color : green; }")
+
 			grid_layout.addWidget(label, i, j)
 
 
-sudoku_rows = [
+examples = [
 	[[4, 1, 2, 0],
 	 [0, 2, 0, 4],
 	 [1, 4, 0, 2],
@@ -455,6 +467,16 @@ sudoku_rows = [
 	 [0, 0, 0, 3, 0, 0, 8, 0, 6],
 	 [0, 0, 0, 5, 7, 0, 0, 0, 3]],
 
+	[[0, 0, 0, 9, 0, 3, 0, 0, 0],
+	 [0, 0, 5, 4, 0, 8, 1, 0, 0],
+	 [0, 9, 0, 0, 2, 0, 0, 3, 0],
+	 [1, 2, 0, 0, 0, 0, 0, 5, 3],
+	 [0, 0, 0, 0, 0, 0, 0, 0, 0],
+	 [9, 5, 0, 0, 0, 0, 0, 7, 8],
+	 [0, 7, 0, 0, 4, 0, 0, 1, 0],
+	 [0, 0, 9, 6, 0, 1, 3, 0, 0],
+	 [0, 0, 0, 7, 0, 5, 0, 0, 0]],
+
 	[[ 3, 13,  0,  0, 15,  0,  0,  0,  0,  7,  6,  4,  0, 16,  0, 14],
 	 [ 0,  0,  0,  2, 11,  0, 13,  8,  0,  0,  0,  0,  5, 10,  0,  3],
 	 [ 0,  0,  0, 14,  9,  0, 16,  4,  0,  0,  2, 15,  0,  6,  0,  0],
@@ -472,7 +494,7 @@ sudoku_rows = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(sudoku_rows[6], 4)
+sudoku = Sudoku(examples[5], 3)
 sudoku_thread = QThread()
 
 
@@ -519,11 +541,8 @@ update_grid_layout()
 main_window.show()
 app.exec_()
 
-
-solved = sudoku.solve()
-
 print()
-print("Solved!" if solved else "Not solved.")
+print("Solved!" if sudoku.is_solved else "Not solved.")
 print(f"{sudoku.total_tries} steps.")
 print(f"Result is {'valid' if sudoku.is_valid() else 'invalid'}.")
 print(f"Max difficulty: {sudoku.max_difficulty}")
