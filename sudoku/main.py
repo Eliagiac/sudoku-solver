@@ -1,3 +1,5 @@
+import time
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -17,9 +19,9 @@ class GridBackgroundWidget(QWidget):
 	grid_size = 9
 
 	def __init__(self, box_size, grid_size):
+		super().__init__()
 		self.box_size = box_size
 		self.grid_size = grid_size
-		super().__init__()
 
 	def paintEvent(self, event):
 		painter = QPainter(self)
@@ -96,7 +98,9 @@ class Square:
 		return self.n == 0
 
 
-class Sudoku:
+class Sudoku(QObject):
+	step_done = pyqtSignal()
+
 	box_size = 0
 	grid_size = 0
 	
@@ -111,7 +115,10 @@ class Sudoku:
 	total_tries = 0
 	max_difficulty = 0
 
+	is_solved = False
+
 	def __init__(self, rows, box_size):
+		super().__init__()
 		self.box_size = box_size
 		self.grid_size = box_size ** 2
 		
@@ -185,6 +192,8 @@ class Sudoku:
 				return False
 
 			print_grid(self.grid)
+			self.step_done.emit()
+			time.sleep(time_between_steps)
 
 			# Fill squares that are the only empty square in a row/column/box.
 			if self.fill_single_empty_squares():
@@ -199,7 +208,7 @@ class Sudoku:
 				continue
 
 			self.compute_candidates()
-			
+
 			# Fill squares that have only one candidate number (all other numbers are already in the same row/column/box)
 			if self.fill_squares_with_one_candidate():
 				self.max_difficulty = max(self.max_difficulty, 3)
@@ -376,7 +385,7 @@ def clear_grid_layout():
 		grid_layout.itemAt(i).widget().deleteLater()
 
 
-def update_grid_layout(sudoku):
+def update_grid_layout():
 	clear_grid_layout()
 
 	for i in range(sudoku.grid_size):
@@ -459,8 +468,11 @@ sudoku = Sudoku(sudoku_rows[5], 3)
 
 
 def solve():
-	sudoku.solve()
-	update_grid_layout(sudoku)
+	sudoku_thread = QThread()
+	sudoku.moveToThread(sudoku_thread)
+	sudoku.step_done.connect(update_grid_layout)
+	sudoku_thread.started.connect(sudoku.solve)
+	sudoku_thread.start()
 
 
 app = QApplication([])
@@ -493,7 +505,7 @@ solve_button.clicked.connect(solve)
 main_window_layout.addWidget(solve_button, 1, 0)
 
 
-update_grid_layout(sudoku)
+update_grid_layout()
 
 
 main_window.show()
