@@ -103,6 +103,8 @@ class Sudoku(QObject):
 	finished = pyqtSignal()
 	step_done = pyqtSignal()
 
+	paused = False
+
 	box_size = 0
 	grid_size = 0
 	
@@ -117,6 +119,8 @@ class Sudoku(QObject):
 	# Stores the grid state after each step.
 	steps = []
 	steps_differences = []
+
+	current_step = 0
 
 	total_tries = 0
 	max_difficulty = 0
@@ -134,6 +138,9 @@ class Sudoku(QObject):
 
 		for row_index, row in enumerate(rows):
 			self.grid.append([Square([row_index, square_index], n) for square_index, n in enumerate(row)])
+
+		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
+		self.steps_differences.append([-1, -1])
 
 	def set_square(self, pos, n):
 		self.grid[pos[0]][pos[1]] = Square([pos[0], pos[1]], n)
@@ -203,11 +210,16 @@ class Sudoku(QObject):
 				return False
 
 			print_grid(self.grid)
-			self.steps.append(self.grid.copy())
+			self.current_step += 1
+			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
 			self.step_done.emit()
 
 			if pause_between_steps:
 				time.sleep(time_between_steps)
+
+			# Wait for an unpause command.
+			while self.paused:
+				time.sleep(0.01)
 
 			# Fill squares that are the only empty square in a row/column/box.
 			if self.fill_single_empty_squares():
@@ -402,16 +414,16 @@ def clear_grid_layout():
 		grid_layout.itemAt(i).widget().deleteLater()
 
 
-def update_grid_layout():
+def update_grid_layout(current_step=-1, show_previous_difference=False):
 	clear_grid_layout()
 
 	for i in range(sudoku.grid_size):
 		for j in range(sudoku.grid_size):
-			label = QLabel(str(sudoku.grid[i][j]))
+			label = QLabel(str(sudoku.steps[current_step][i][j]))
 			label.setFont(QFont('Times', 12))
 			label.setAlignment(Qt.AlignCenter)
 
-			if len(sudoku.steps_differences) > 0 and sudoku.steps_differences[-1] == [i, j]:
+			if len(sudoku.steps_differences) > 0 and sudoku.steps_differences[current_step-show_previous_difference] == [i, j]:
 				label.setStyleSheet("QLabel { background-color : green; }")
 
 			grid_layout.addWidget(label, i, j)
@@ -495,20 +507,47 @@ examples = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(examples[5], 3)
+sudoku = Sudoku(examples[7], 4)
 sudoku_thread = QThread()
 
 
-def solve():
+def start_solve():
 	sudoku.moveToThread(sudoku_thread)
 	sudoku.step_done.connect(update_grid_layout)
 	sudoku_thread.started.connect(sudoku.start_solve)
 	sudoku_thread.start()
 
 
+def toggle_paused():
+	if not sudoku.paused:
+		pause_button.setIcon(QIcon("icons//play.png"))
+		sudoku.paused = True
+
+	else:
+		pause_button.setIcon(QIcon("icons//pause.png"))
+		sudoku.paused = False
+
+
+def previous_step():
+	if sudoku.current_step == 0:
+		return
+
+	sudoku.current_step -= 1
+	sudoku.grid = sudoku.steps[sudoku.current_step]
+	update_grid_layout(sudoku.current_step, True)
+
+
+def next_step():
+	if sudoku.current_step == len(sudoku.steps) - 1:
+		return
+
+	sudoku.current_step += 1
+	sudoku.grid = sudoku.steps[sudoku.current_step]
+	update_grid_layout(sudoku.current_step, True)
+
+
 app = QApplication([])
 main_window = QWidget()
-main_window.setGeometry(100, 100, window_size + bg_margin_size[0], window_size + bg_margin_size[1])
 
 main_window_layout = QGridLayout()
 main_window.setLayout(main_window_layout)
@@ -535,9 +574,29 @@ background.addWidget(GridBackgroundWidget(sudoku.box_size, sudoku.grid_size), 0,
 grid_window_layout.addWidget(background_widget, 0, 0)
 
 solve_button = QPushButton()
-solve_button.setText("Solve")
-solve_button.clicked.connect(solve)
+solve_button.setText("Start solving...")
+solve_button.clicked.connect(start_solve)
 main_window_layout.addWidget(solve_button, 1, 0)
+
+pause_button = QPushButton()
+pause_button.setIcon(QIcon("icons//pause.png"))
+pause_button.clicked.connect(toggle_paused)
+main_window_layout.addWidget(pause_button, 2, 0)
+
+navigation_widget = QWidget()
+navigation_layout = QGridLayout()
+navigation_widget.setLayout(navigation_layout)
+main_window_layout.addWidget(navigation_widget, 3, 0)
+
+previous_button = QPushButton()
+previous_button.setIcon(QIcon("icons//left-arrow.png"))
+previous_button.clicked.connect(previous_step)
+navigation_layout.addWidget(previous_button, 0, 0)
+
+next_button = QPushButton()
+next_button.setIcon(QIcon("icons//right-arrow.png"))
+next_button.clicked.connect(next_step)
+navigation_layout.addWidget(next_button, 0, 1)
 
 
 update_grid_layout()
