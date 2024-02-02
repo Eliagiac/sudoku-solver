@@ -1,6 +1,68 @@
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
+from PyQt5.QtCore import *
+
 max_tries = 1000
 
 extra_spaces = 1
+
+window_size = 600
+margin_size = [58, 87]
+
+time_between_steps = 1
+
+
+class GridBackgroundWidget(QWidget):
+	box_size = 3
+	grid_size = 9
+
+	def __init__(self, box_size, grid_size):
+		self.box_size = box_size
+		self.grid_size = grid_size
+		super().__init__()
+
+	def paintEvent(self, event):
+		painter = QPainter(self)
+		pen = QPen()
+
+		# Draw square boundaries.
+		pen.setWidth(1)
+		pen.setColor(Qt.gray)
+		painter.setPen(pen)
+
+		square_width = window_size / self.grid_size
+		for i in range(self.grid_size):
+			position = round(square_width*i)
+			painter.drawLine(position, 0, position, window_size)
+			painter.drawLine(0, position, window_size, position)
+
+		# Draw box boundaries.
+		pen.setWidth(2)
+		pen.setColor(Qt.black)
+		painter.setPen(pen)
+
+		box_width = window_size / self.box_size
+		for i in range(self.box_size):
+			position = round(box_width*i)
+			painter.drawLine(position, 0, position, window_size)
+			painter.drawLine(0, position, window_size, position)
+
+		# Draw grid boundaries.
+		pen.setWidth(6)
+		pen.setColor(Qt.black)
+		painter.setPen(pen)
+
+		corners = [
+			QPoint(0, 0),
+			QPoint(0, window_size),
+			QPoint(window_size, 0),
+			QPoint(window_size, window_size)
+		]
+
+		painter.drawLine(corners[0], corners[1])
+		painter.drawLine(corners[1], corners[3])
+		painter.drawLine(corners[3], corners[2])
+		painter.drawLine(corners[2], corners[0])
 
 
 # Each square also stores its position in the squares array (indexed by [row][column])
@@ -32,14 +94,6 @@ class Square:
 
 	def is_empty(self):
 		return self.n == 0
-
-
-def empty_squares(sequence):
-	empty_squares = []
-	for square in sequence:
-		if square.n == 0:
-			empty_squares.append(square.pos)
-	return empty_squares
 
 
 class Sudoku:
@@ -278,6 +332,14 @@ class Sudoku:
 		return groups_count
 
 
+def empty_squares(sequence):
+	empty_squares = []
+	for square in sequence:
+		if square.n == 0:
+			empty_squares.append(square.pos)
+	return empty_squares
+
+
 def missing_single_index(squares):
 	missing_single_index = -1
 	empty_count = 0
@@ -307,6 +369,22 @@ def print_grid(grid):
 		print(line)
 
 	print()
+
+
+def clear_grid_layout():
+	for i in reversed(range(grid_layout.count())):
+		grid_layout.itemAt(i).widget().deleteLater()
+
+
+def update_grid_layout(sudoku):
+	clear_grid_layout()
+
+	for i in range(sudoku.grid_size):
+		for j in range(sudoku.grid_size):
+			label = QLabel(str(sudoku.grid[i][j]))
+			label.setFont(QFont('Times', 12))
+			label.setAlignment(Qt.AlignCenter)
+			grid_layout.addWidget(label, i, j)
 
 
 sudoku_rows = [
@@ -377,8 +455,51 @@ sudoku_rows = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-
 sudoku = Sudoku(sudoku_rows[5], 3)
+
+
+def solve():
+	sudoku.solve()
+	update_grid_layout(sudoku)
+
+
+app = QApplication([])
+main_window = QWidget()
+main_window.setGeometry(100, 100, window_size + margin_size[0], window_size + margin_size[1])
+
+main_window_layout = QGridLayout()
+main_window.setLayout(main_window_layout)
+
+grid_window = QWidget()
+grid_window_layout = QGridLayout()
+grid_window.setLayout(grid_window_layout)
+main_window_layout.addWidget(grid_window, 0, 0)
+
+background_widget = QWidget()
+background = QGridLayout()
+background_widget.setLayout(background)
+background.addWidget(GridBackgroundWidget(sudoku.box_size, sudoku.grid_size), 0, 0)
+
+grid_window_layout.addWidget(background_widget, 0, 0)
+
+grid_widget = QWidget()
+grid_layout = QGridLayout()
+grid_widget.setLayout(grid_layout)
+grid_window_layout.addWidget(grid_widget, 0, 0)
+
+solve_button = QPushButton()
+solve_button.setText("Solve")
+solve_button.clicked.connect(solve)
+main_window_layout.addWidget(solve_button, 1, 0)
+
+
+update_grid_layout(sudoku)
+
+
+main_window.show()
+app.exec_()
+
+
 solved = sudoku.solve()
 
 print()
