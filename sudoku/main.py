@@ -11,7 +11,7 @@ extra_spaces = 1
 window_size = 600
 margin_size = [58, 87]
 
-time_between_steps = 1
+time_between_steps = 0.05
 
 
 class GridBackgroundWidget(QWidget):
@@ -99,6 +99,7 @@ class Square:
 
 
 class Sudoku(QObject):
+	finished = pyqtSignal()
 	step_done = pyqtSignal()
 
 	box_size = 0
@@ -180,7 +181,12 @@ class Sudoku(QObject):
 
 		return True
 
-	def solve(self):
+	def start_solve(self, ):
+		self.is_solved = self.solve(True)
+		self.step_done.emit()
+		self.finished.emit()
+
+	def solve(self, pause_between_steps):
 		self.total_tries = 0
 		while any(square.is_empty() for row in self.grid for square in row):
 			if not self.is_valid():
@@ -193,7 +199,9 @@ class Sudoku(QObject):
 
 			print_grid(self.grid)
 			self.step_done.emit()
-			time.sleep(time_between_steps)
+
+			if pause_between_steps:
+				time.sleep(time_between_steps)
 
 			# Fill squares that are the only empty square in a row/column/box.
 			if self.fill_single_empty_squares():
@@ -464,14 +472,14 @@ sudoku_rows = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(sudoku_rows[5], 3)
+sudoku = Sudoku(sudoku_rows[6], 4)
+sudoku_thread = QThread()
 
 
 def solve():
-	sudoku_thread = QThread()
 	sudoku.moveToThread(sudoku_thread)
 	sudoku.step_done.connect(update_grid_layout)
-	sudoku_thread.started.connect(sudoku.solve)
+	sudoku_thread.started.connect(sudoku.start_solve)
 	sudoku_thread.start()
 
 
