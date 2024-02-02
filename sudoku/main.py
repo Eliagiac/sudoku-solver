@@ -9,7 +9,8 @@ max_tries = 1000
 extra_spaces = 1
 
 window_size = 600
-margin_size = [58, 87]
+bg_margin_size = [18, 18]
+grid_margin_size = [9, 9]
 
 time_between_steps = 0.05
 
@@ -507,7 +508,7 @@ def solve():
 
 app = QApplication([])
 main_window = QWidget()
-main_window.setGeometry(100, 100, window_size + margin_size[0], window_size + margin_size[1])
+main_window.setGeometry(100, 100, window_size + bg_margin_size[0], window_size + bg_margin_size[1])
 
 main_window_layout = QGridLayout()
 main_window.setLayout(main_window_layout)
@@ -517,17 +518,21 @@ grid_window_layout = QGridLayout()
 grid_window.setLayout(grid_window_layout)
 main_window_layout.addWidget(grid_window, 0, 0)
 
+grid_widget = QWidget()
+grid_layout = QGridLayout()
+grid_layout.setContentsMargins(grid_margin_size[0], grid_margin_size[1], grid_margin_size[0], grid_margin_size[1])
+grid_layout.setSpacing(0)
+grid_widget.setFixedHeight(window_size + bg_margin_size[1])
+grid_widget.setFixedWidth(window_size + bg_margin_size[0])
+grid_widget.setLayout(grid_layout)
+grid_window_layout.addWidget(grid_widget, 0, 0)
+
 background_widget = QWidget()
 background = QGridLayout()
 background_widget.setLayout(background)
 background.addWidget(GridBackgroundWidget(sudoku.box_size, sudoku.grid_size), 0, 0)
 
 grid_window_layout.addWidget(background_widget, 0, 0)
-
-grid_widget = QWidget()
-grid_layout = QGridLayout()
-grid_widget.setLayout(grid_layout)
-grid_window_layout.addWidget(grid_widget, 0, 0)
 
 solve_button = QPushButton()
 solve_button.setText("Solve")
