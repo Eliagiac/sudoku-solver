@@ -232,6 +232,7 @@ class Sudoku(QObject):
 	max_difficulty = 0
 
 	is_solved = False
+	solve_failed = False
 
 	pause_between_steps = True
 	update_gui = True
@@ -332,6 +333,7 @@ class Sudoku(QObject):
 
 			self.total_steps += 1
 			if self.total_steps >= max_tries:
+				self.solve_failed = True
 				return False
 
 			print_grid(self.grid)
@@ -379,6 +381,7 @@ class Sudoku(QObject):
 				print("Difficulty: 4")
 				continue
 
+			self.solve_failed = True
 			return False
 
 		print_grid(self.grid)
@@ -823,41 +826,55 @@ def toggle_paused(force_pause=False):
 		start_solve()
 
 
+def pause_once():
+	toggle_paused(True)
+	sudoku.step_done.disconnect(pause_once)
+
+
 def previous_step():
+	toggle_paused(True)
+
 	if sudoku.current_step == 1:
 		return
 
-	toggle_paused(True)
 	sudoku.current_step -= 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
 
 
 def next_step():
-	if sudoku.current_step == len(sudoku.steps) - 1:
-		return
-
 	toggle_paused(True)
-	sudoku.current_step += 1
-	sudoku.grid = sudoku.steps[sudoku.current_step]
-	update_grid_layout(sudoku.current_step, True)
+
+	if sudoku.current_step == len(sudoku.steps) - 1:
+		if sudoku.is_solved or sudoku.solve_failed:
+			return
+
+		sudoku.step_done.connect(pause_once)
+		toggle_paused(False)
+
+	else:
+		sudoku.current_step += 1
+		sudoku.grid = sudoku.steps[sudoku.current_step]
+		update_grid_layout(sudoku.current_step, True)
 
 
 def jump_to_start():
+	toggle_paused(True)
+
 	if sudoku.current_step == 1:
 		return
 
-	toggle_paused(True)
 	sudoku.current_step = 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
 
 
 def jump_to_end():
+	toggle_paused(True)
+
 	if sudoku.current_step == len(sudoku.steps) - 1:
 		return
 
-	toggle_paused(True)
 	sudoku.current_step = len(sudoku.steps) - 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
