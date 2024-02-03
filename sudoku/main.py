@@ -68,6 +68,35 @@ class GridBackgroundWidget(QWidget):
 		painter.drawLine(corners[2], corners[0])
 
 
+class Rectangle(QWidget):
+	color = Qt.red
+	stroke_width = 3
+
+	x = 0
+	y = 0
+	w = 0
+	h = 0
+
+	def __init__(self, x, y, w, h, color=Qt.red, stroke_width=3):
+		super().__init__()
+		self.x = x
+		self.y = y
+		self.w = w
+		self.h = h
+		self.color = color
+		self.stroke_width = stroke_width
+
+	def paintEvent(self, event):
+		painter = QPainter(self)
+		pen = QPen()
+
+		pen.setWidth(self.stroke_width)
+		pen.setColor(self.color)
+		painter.setPen(pen)
+
+		painter.drawRect(self.x, self.y, self.w, self.h)
+
+
 # Each square also stores its position in the squares array (indexed by [row][column])
 class Square:
 	pos = []
@@ -448,16 +477,38 @@ def clear_grid_layout():
 	for i in reversed(range(grid_layout.count())):
 		grid_layout.itemAt(i).widget().deleteLater()
 
+	for i in reversed(range(drawings.count())):
+		drawings.itemAt(i).widget().deleteLater()
 
-def update_grid_layout(current_step=-1, show_previous_difference=False):
+
+def highlight_sequence(sequence):
+	square_width = window_size / sudoku.grid_size
+
+	start_square = sequence[0]
+	end_square = sequence[-1]
+
+	x = round(square_width * start_square.pos[1])
+	y = round(square_width * start_square.pos[0])
+	w = round((square_width * (end_square.pos[1]+1)) - x)
+	h = round((square_width * (end_square.pos[0]+1)) - y)
+
+	drawings.addWidget(Rectangle(x, y, w, h), 0, 0)
+
+
+def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True):
 	clear_grid_layout()
 
 	explanation = None
 	if len(sudoku.explanations) > 0:
 		explanation = sudoku.explanations[current_step-show_previous_difference]
 
-	if explanation is not None:
+	if explanation is not None and show_explanations:
 		explanation_label.setText(explanation.text)
+
+		if explanation.affected_sequence is not None and len(explanation.affected_sequence) > 0:
+			highlight_sequence(explanation.affected_sequence)
+
+	step_difference = sudoku.steps_differences[current_step-show_previous_difference]
 
 	for i in range(sudoku.grid_size):
 		for j in range(sudoku.grid_size):
@@ -465,8 +516,9 @@ def update_grid_layout(current_step=-1, show_previous_difference=False):
 			label.setFont(QFont('Times', 12))
 			label.setAlignment(Qt.AlignCenter)
 
-			if len(sudoku.steps_differences) > 0 and sudoku.steps_differences[current_step-show_previous_difference] == [i, j]:
-				label.setStyleSheet("QLabel { background-color : green; }")
+			if show_explanations:
+				if len(sudoku.steps_differences) > 0 and step_difference == [i, j]:
+					label.setStyleSheet("QLabel { background-color : green; }")
 
 			grid_layout.addWidget(label, i, j)
 
@@ -617,8 +669,12 @@ background_widget = QWidget()
 background = QGridLayout()
 background_widget.setLayout(background)
 background.addWidget(GridBackgroundWidget(sudoku.box_size, sudoku.grid_size), 0, 0)
-
 grid_window_layout.addWidget(background_widget, 0, 0)
+
+drawings_widget = QWidget()
+drawings = QGridLayout()
+drawings_widget.setLayout(drawings)
+grid_window_layout.addWidget(drawings_widget, 0, 0)
 
 solve_button = QPushButton()
 solve_button.setText("Start solving...")
