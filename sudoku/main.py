@@ -764,9 +764,13 @@ sudoku_thread = QThread()
 
 
 def start_solve():
+	if sudoku.paused:
+		toggle_paused()
+
 	sudoku.moveToThread(sudoku_thread)
 	sudoku.step_done.connect(update_grid_layout)
 	sudoku.finished.connect(sudoku_thread.exit)
+	sudoku.finished.connect(lambda: toggle_paused(True))
 
 	if not sudoku.is_solved:
 		sudoku_thread.started.connect(sudoku.start_solve)
@@ -779,18 +783,19 @@ def show_solution():
 		jump_to_end()
 		return
 
-	sudoku.pause_between_steps = False
-	start_solve()
 	toggle_calculating_solution(True)
 	sudoku.finished.connect(toggle_calculating_solution)
+
+	sudoku.pause_between_steps = False
+	start_solve()
 
 
 def toggle_calculating_solution(calculating=False):
 	show_solution_button.setText("Calculating solution..." if calculating else "Show solution")
 
 
-def toggle_paused():
-	if not sudoku.paused:
+def toggle_paused(force_pause=False):
+	if not sudoku.paused or force_pause:
 		pause_button.setIcon(QIcon("icons//play.png"))
 		sudoku.paused = True
 
@@ -805,7 +810,7 @@ def previous_step():
 	if sudoku.current_step == 1:
 		return
 
-	sudoku.paused = True
+	toggle_paused(True)
 	sudoku.current_step -= 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
@@ -815,6 +820,7 @@ def next_step():
 	if sudoku.current_step == len(sudoku.steps) - 1:
 		return
 
+	toggle_paused(True)
 	sudoku.current_step += 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
@@ -824,7 +830,7 @@ def jump_to_start():
 	if sudoku.current_step == 1:
 		return
 
-	sudoku.paused = True
+	toggle_paused(True)
 	sudoku.current_step = 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
@@ -834,7 +840,7 @@ def jump_to_end():
 	if sudoku.current_step == len(sudoku.steps) - 1:
 		return
 
-	sudoku.paused = True
+	toggle_paused(True)
 	sudoku.current_step = len(sudoku.steps) - 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
@@ -881,15 +887,10 @@ show_solution_button.setText("Show solution")
 show_solution_button.clicked.connect(show_solution)
 main_window_layout.addWidget(show_solution_button, 2, 0)
 
-solve_button = QPushButton()
-solve_button.setText("Start solving...")
-solve_button.clicked.connect(start_solve)
-main_window_layout.addWidget(solve_button, 3, 0)
-
 navigation_widget = QWidget()
 navigation_layout = QGridLayout()
 navigation_widget.setLayout(navigation_layout)
-main_window_layout.addWidget(navigation_widget, 4, 0)
+main_window_layout.addWidget(navigation_widget, 3, 0)
 
 jump_to_start_button = QPushButton()
 jump_to_start_button.setIcon(QIcon("icons//left-jump.png"))
@@ -917,6 +918,7 @@ jump_to_end_button.clicked.connect(jump_to_end)
 navigation_layout.addWidget(jump_to_end_button, 0, 9, 0, 1)
 
 
+toggle_paused(True)
 update_grid_layout()
 
 
