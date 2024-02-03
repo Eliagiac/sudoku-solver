@@ -228,12 +228,13 @@ class Sudoku(QObject):
 
 	current_step = 0
 
-	total_tries = 0
+	total_steps = 0
 	max_difficulty = 0
 
 	is_solved = False
 
 	pause_between_steps = True
+	update_gui = True
 
 	def __init__(self, rows, box_size):
 		super().__init__()
@@ -249,6 +250,10 @@ class Sudoku(QObject):
 
 		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
 		self.explanations.append(Explanation("Loaded puzzle."))
+
+	def reset_gui_settings(self):
+		self.pause_between_steps = True
+		self.update_gui = True
 
 	def set_square(self, pos, n):
 		self.grid[pos[0]][pos[1]] = Square([pos[0], pos[1]], n)
@@ -311,26 +316,28 @@ class Sudoku(QObject):
 		self.step_done.emit()
 		self.finished.emit()
 
-		# When we're done solving reset pauses to the default.
-		self.pause_between_steps = True
+		# When we're done solving reset GUI settings to the default.
+		self.reset_gui_settings()
 
 	def solve(self):
-		self.total_tries = 0
+		self.total_steps = 0
 		while any(square.is_empty() for row in self.grid for square in row):
 			if not self.is_valid():
 				print("Error occurred while solving.")
 				return False
 
-			self.total_tries += 1
-			if self.total_tries >= max_tries:
+			self.total_steps += 1
+			if self.total_steps >= max_tries:
 				return False
 
 			print_grid(self.grid)
 			self.current_step += 1
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
-			self.step_done.emit()
 
-			if self.pause_between_steps and self.total_tries > 1:
+			if self.update_gui:
+				self.step_done.emit()
+
+			if self.pause_between_steps and self.total_steps > 1:
 				time.sleep(time_between_steps)
 
 			# Wait for an unpause command.
@@ -771,9 +778,7 @@ def start_solve():
 	sudoku.step_done.connect(update_grid_layout)
 	sudoku.finished.connect(sudoku_thread.exit)
 	sudoku.finished.connect(lambda: toggle_paused(True))
-
-	if not sudoku.is_solved:
-		sudoku_thread.started.connect(sudoku.start_solve)
+	sudoku_thread.started.connect(sudoku.start_solve)
 
 	sudoku_thread.start()
 
@@ -787,6 +792,7 @@ def show_solution():
 	sudoku.finished.connect(toggle_calculating_solution)
 
 	sudoku.pause_between_steps = False
+	sudoku.update_gui = False
 	start_solve()
 
 
@@ -927,6 +933,6 @@ app.exec_()
 
 print()
 print("Solved!" if sudoku.is_solved else "Not solved.")
-print(f"{sudoku.total_tries} steps.")
+print(f"{sudoku.total_steps} steps.")
 print(f"Result is {'valid' if sudoku.is_valid() else 'invalid'}.")
 print(f"Max difficulty: {sudoku.max_difficulty}")
