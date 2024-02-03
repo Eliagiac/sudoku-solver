@@ -12,7 +12,7 @@ window_size = 600
 bg_margin_size = [18, 18]
 grid_margin_size = [9, 9]
 
-time_between_steps = 0.05
+time_between_steps = 1
 
 
 class GridBackgroundWidget(QWidget):
@@ -99,12 +99,12 @@ class Rectangle(QWidget):
 
 class Circle(QWidget):
 	color = Qt.red
-	stroke_width = 3
+	stroke_width = 2
 
 	center = 0
 	r = 0
 
-	def __init__(self, center, r, color=Qt.red, stroke_width=3):
+	def __init__(self, center, r, color=Qt.red, stroke_width=2):
 		super().__init__()
 		self.center = center
 		self.r = r
@@ -122,15 +122,21 @@ class Circle(QWidget):
 		painter.drawEllipse(self.center, self.r, self.r)
 
 
-class Cross(QWidget):
+class Line(QWidget):
 	color = Qt.red
-	stroke_width = 3
+	stroke_width = 2
 
-	center = 0
+	x1 = 0
+	y1 = 0
+	x2 = 0
+	y2 = 0
 
-	def __init__(self, center, color=Qt.red, stroke_width=3):
+	def __init__(self, x1, y1, x2, y2, color=Qt.red, stroke_width=2):
 		super().__init__()
-		self.center = center
+		self.x1 = x1
+		self.y1 = y1
+		self.x2 = x2
+		self.y2 = y2
 		self.color = color
 		self.stroke_width = stroke_width
 
@@ -141,6 +147,8 @@ class Cross(QWidget):
 		pen.setWidth(self.stroke_width)
 		pen.setColor(self.color)
 		painter.setPen(pen)
+
+		painter.drawLine(self.x1, self.y1, self.x2, self.y2)
 
 
 # Each square also stores its position in the squares array (indexed by [row][column])
@@ -314,7 +322,7 @@ class Sudoku(QObject):
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
 			self.step_done.emit()
 
-			if pause_between_steps:
+			if pause_between_steps and self.total_tries > 1:
 				time.sleep(time_between_steps)
 
 			# Wait for an unpause command.
@@ -421,10 +429,12 @@ class Sudoku(QObject):
 
 		for pos in empty_squares(sequence):
 			new_conflicts = self.conflicts(pos[0], pos[1], n)
-			conflicts += new_conflicts
 
 			if len(new_conflicts) == 0:
 				possible_squares.append(pos)
+
+			else:
+				conflicts.append((new_conflicts, pos))
 
 		return possible_squares, conflicts
 
@@ -440,8 +450,10 @@ class Sudoku(QObject):
 					self.set_square(pos, n)
 					self.steps_differences.append(pos)
 					self.explanations.append(Explanation(
-						f"There is only one square in the sequence where {n} could go.",
-						pos, sequence, circled_squares=conflicts))
+						f"There is only one square in the sequence where {n} could go.", pos, sequence,
+						circled_squares=[conflicting_square for conflict in conflicts for conflicting_square in conflict[0]],
+						crossed_lines=[[conflicting_square, conflict[1]] for conflict in conflicts for conflicting_square in conflict[0]]
+					))
 					return True
 
 		return False
@@ -586,6 +598,21 @@ def circle_squares(squares):
 		drawings.addWidget(Circle(center, r), 0, 0)
 
 
+def draw_lines(lines):
+	square_width = window_size / sudoku.grid_size
+
+	for line in lines:
+		start_pos = line[0]
+		end_pos = line[1]
+
+		x1 = round((start_pos[1] * square_width) + square_width/2)
+		y1 = round((start_pos[0] * square_width) + square_width/2)
+		x2 = round((end_pos[1] * square_width) + square_width/2)
+		y2 = round((end_pos[0] * square_width) + square_width/2)
+
+		drawings.addWidget(Line(x1, y1, x2, y2), 0, 0)
+
+
 def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True):
 	clear_grid_layout()
 
@@ -601,6 +628,9 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 
 		if explanation.circled_squares is not None and len(explanation.circled_squares) > 0:
 			circle_squares(explanation.circled_squares)
+
+		if explanation.crossed_lines is not None and len(explanation.crossed_lines) > 0:
+			draw_lines(explanation.crossed_lines)
 
 	step_difference = sudoku.steps_differences[current_step-show_previous_difference]
 
