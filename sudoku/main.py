@@ -236,6 +236,7 @@ class Sudoku(QObject):
 
 	pause_between_steps = True
 	update_gui = True
+	should_reset_gui_settings = False
 
 	def __init__(self, rows, box_size):
 		super().__init__()
@@ -255,6 +256,10 @@ class Sudoku(QObject):
 	def reset_gui_settings(self):
 		self.pause_between_steps = True
 		self.update_gui = True
+		self.should_reset_gui_settings = False
+
+	def reset_gui_settings_later(self):
+		self.should_reset_gui_settings = True
 
 	def set_square(self, pos, n):
 		self.grid[pos[0]][pos[1]] = Square([pos[0], pos[1]], n)
@@ -345,6 +350,9 @@ class Sudoku(QObject):
 
 			if self.pause_between_steps and self.total_steps > 1:
 				time.sleep(time_between_steps)
+
+			if self.should_reset_gui_settings:
+				self.reset_gui_settings()
 
 			# Wait for an unpause command.
 			while self.paused:
@@ -780,7 +788,7 @@ examples = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(examples[6], 3)
+sudoku = Sudoku(examples[7], 4)
 sudoku_thread = QThread()
 
 
@@ -816,18 +824,19 @@ def toggle_calculating_solution(calculating=False):
 
 def toggle_paused(force_pause=False):
 	if not sudoku.paused or force_pause:
-		pause_button.setIcon(QIcon("icons//play.png"))
 		sudoku.paused = True
+		pause_button.setIcon(QIcon("icons//play.png"))
 
 	else:
-		pause_button.setIcon(QIcon("icons//pause.png"))
 		sudoku.paused = False
+		pause_button.setIcon(QIcon("icons//pause.png"))
 
 		start_solve()
 
 
 def pause_once():
 	toggle_paused(True)
+	sudoku.reset_gui_settings_later()
 	sudoku.step_done.disconnect(pause_once)
 
 
@@ -848,6 +857,9 @@ def next_step():
 	if sudoku.current_step == len(sudoku.steps) - 1:
 		if sudoku.is_solved or sudoku.solve_failed:
 			return
+
+		sudoku.pause_between_steps = False
+		sudoku.update_gui = True
 
 		sudoku.step_done.connect(pause_once)
 		toggle_paused(False)
