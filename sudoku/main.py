@@ -452,7 +452,8 @@ class Sudoku(QObject):
 					self.explanations.append(Explanation(
 						f"There is only one square in the sequence where {n} could go.", pos, sequence,
 						circled_squares=[conflicting_square for conflict in conflicts for conflicting_square in conflict[0]],
-						crossed_lines=[[conflicting_square, conflict[1]] for conflict in conflicts for conflicting_square in conflict[0]]
+						crossed_lines=[[conflicting_square, conflict[1]] for conflict in conflicts for conflicting_square in conflict[0]],
+						crossed_squares=[conflict[1] for conflict in conflicts]
 					))
 					return True
 
@@ -613,6 +614,29 @@ def draw_lines(lines):
 		drawings.addWidget(Line(x1, y1, x2, y2), 0, 0)
 
 
+def cross_squares(squares):
+	square_width = window_size / sudoku.grid_size
+
+	for i, pos in enumerate(squares):
+		# Avoid drawing two crosses on the same square.
+		if pos in squares[:i]:
+			continue
+
+		line1_x1 = round((pos[1] * square_width) + 0.2*square_width)
+		line1_y1 = round((pos[0] * square_width) + 0.2*square_width)
+		line1_x2 = round(((pos[1] + 1) * square_width) - 0.2*square_width)
+		line1_y2 = round(((pos[0] + 1) * square_width) - 0.2*square_width)
+
+		drawings.addWidget(Line(line1_x1, line1_y1, line1_x2, line1_y2), 0, 0)
+
+		line2_x1 = round((pos[1] * square_width) + 0.2*square_width)
+		line2_y1 = round(((pos[0] + 1) * square_width) - 0.2*square_width)
+		line2_x2 = round(((pos[1] + 1) * square_width) - 0.2*square_width)
+		line2_y2 = round((pos[0] * square_width) + 0.2*square_width)
+
+		drawings.addWidget(Line(line2_x1, line2_y1, line2_x2, line2_y2), 0, 0)
+
+
 def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True):
 	clear_grid_layout()
 
@@ -631,6 +655,9 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 
 		if explanation.crossed_lines is not None and len(explanation.crossed_lines) > 0:
 			draw_lines(explanation.crossed_lines)
+
+		if explanation.crossed_squares is not None and len(explanation.crossed_squares) > 0:
+			cross_squares(explanation.crossed_squares)
 
 	step_difference = sudoku.steps_differences[current_step-show_previous_difference]
 
