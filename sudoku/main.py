@@ -224,7 +224,6 @@ class Sudoku(QObject):
 
 	# Stores the grid state after each step.
 	steps = []
-	steps_differences = []
 	explanations = []
 
 	current_step = 0
@@ -247,7 +246,6 @@ class Sudoku(QObject):
 			self.grid.append([Square([row_index, square_index], n) for square_index, n in enumerate(row)])
 
 		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
-		self.steps_differences.append([-1, -1])
 		self.explanations.append(Explanation("Starting grid"))
 
 	def set_square(self, pos, n):
@@ -374,7 +372,6 @@ class Sudoku(QObject):
 
 				n = self.first_missing_digit(sequence)
 				self.set_square(pos, n)
-				self.steps_differences.append(pos)
 				self.explanations.append(Explanation(
 					f"Only one empty square remaining in the sequence. The only number missing is {n}",
 					pos, sequence))
@@ -448,7 +445,6 @@ class Sudoku(QObject):
 					pos = possible_squares[0]
 
 					self.set_square(pos, n)
-					self.steps_differences.append(pos)
 					self.explanations.append(Explanation(
 						f"There is only one square in the sequence where {n} could go.", pos, sequence,
 						circled_squares=[conflicting_square for conflict in conflicts for conflicting_square in conflict[0]],
@@ -476,13 +472,12 @@ class Sudoku(QObject):
 			if len(candidates) == 1:
 				n = candidates[0]
 				self.set_square(pos, n)
-				self.steps_differences.append(pos)
 
 				explanation = ""
 				if not using_candidate_groups:
-					explanation = f"There is only one number ({n}) that could go in this square."
+					explanation = f"{n} is the only number that could go in this square."
 				else:
-					explanation = f"There is only one number ({n}) that could go in this square (using candidate groups)."
+					explanation = f"{n} is the only number that could go in this square (using candidate groups)."
 
 				self.explanations.append(Explanation(explanation, pos))
 				return True
@@ -659,16 +654,14 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 		if explanation.crossed_squares is not None and len(explanation.crossed_squares) > 0:
 			cross_squares(explanation.crossed_squares)
 
-	step_difference = sudoku.steps_differences[current_step-show_previous_difference]
-
 	for i in range(sudoku.grid_size):
 		for j in range(sudoku.grid_size):
 			label = QLabel(str(sudoku.steps[current_step][i][j]))
 			label.setFont(QFont('Times', 12))
 			label.setAlignment(Qt.AlignCenter)
 
-			if show_explanations:
-				if len(sudoku.steps_differences) > 0 and step_difference == [i, j]:
+			if explanation is not None and show_explanations:
+				if explanation.modified_square_pos == [i, j]:
 					label.setStyleSheet("QLabel { background-color : green; }")
 
 			grid_layout.addWidget(label, i, j)
