@@ -309,9 +309,13 @@ class Sudoku(QObject):
 	def start_solve(self):
 		self.is_solved = self.solve()
 
-		self.current_step += 1
-		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
-		self.explanations.append(Explanation("Puzzle is solved."))
+		if self.is_solved:
+			self.current_step += 1
+			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
+			self.explanations.append(Explanation("Puzzle is solved."))
+
+		else:
+			self.explanations.append(Explanation("Couldn't solve the puzzle."))
 
 		self.step_done.emit()
 		self.finished.emit()
@@ -766,7 +770,7 @@ examples = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(examples[7], 4)
+sudoku = Sudoku(examples[6], 3)
 sudoku_thread = QThread()
 
 
