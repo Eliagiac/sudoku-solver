@@ -495,12 +495,19 @@ class Sudoku(QObject):
 				self.set_square(pos, n)
 
 				explanation = ""
+				circled_squares = []
 				if not using_candidate_groups:
 					explanation = f"{n} is the only number that could go in this square."
+					for excluded_number in self.all_possible_numbers:
+						if excluded_number == n:
+							continue
+
+						circled_squares += self.conflicts(pos[0], pos[1], excluded_number)
+
 				else:
 					explanation = f"{n} is the only number that could go in this square (using candidate groups)."
 
-				self.explanations.append(Explanation(explanation, pos))
+				self.explanations.append(Explanation(explanation, pos, circled_squares=circled_squares))
 				return True
 
 		return False
