@@ -233,6 +233,8 @@ class Sudoku(QObject):
 
 	is_solved = False
 
+	pause_between_steps = True
+
 	def __init__(self, rows, box_size):
 		super().__init__()
 		self.box_size = box_size
@@ -246,7 +248,7 @@ class Sudoku(QObject):
 			self.grid.append([Square([row_index, square_index], n) for square_index, n in enumerate(row)])
 
 		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
-		self.explanations.append(Explanation("Starting grid"))
+		self.explanations.append(Explanation("Loaded puzzle."))
 
 	def set_square(self, pos, n):
 		self.grid[pos[0]][pos[1]] = Square([pos[0], pos[1]], n)
@@ -299,12 +301,20 @@ class Sudoku(QObject):
 
 		return True
 
-	def start_solve(self, ):
-		self.is_solved = self.solve(True)
+	def start_solve(self):
+		self.is_solved = self.solve()
+
+		self.current_step += 1
+		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
+		self.explanations.append(Explanation("Puzzle is solved."))
+
 		self.step_done.emit()
 		self.finished.emit()
 
-	def solve(self, pause_between_steps):
+		# When we're done solving reset pauses to the default.
+		self.pause_between_steps = True
+
+	def solve(self):
 		self.total_tries = 0
 		while any(square.is_empty() for row in self.grid for square in row):
 			if not self.is_valid():
@@ -320,7 +330,7 @@ class Sudoku(QObject):
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
 			self.step_done.emit()
 
-			if pause_between_steps and self.total_tries > 1:
+			if self.pause_between_steps and self.total_tries > 1:
 				time.sleep(time_between_steps)
 
 			# Wait for an unpause command.
@@ -373,7 +383,7 @@ class Sudoku(QObject):
 				n = self.first_missing_digit(sequence)
 				self.set_square(pos, n)
 				self.explanations.append(Explanation(
-					f"Only one empty square remaining in the sequence. The only number missing is {n}",
+					f"Only one empty square remaining in the sequence. The only number missing is {n}.",
 					pos, sequence))
 				return True
 
@@ -633,6 +643,10 @@ def cross_squares(squares):
 
 
 def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True):
+	# Only update the UI if we are in a step-by-step solution
+	if not sudoku.pause_between_steps:
+		return
+
 	clear_grid_layout()
 
 	explanation = None
@@ -745,15 +759,34 @@ examples = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(examples[5], 3)
+sudoku = Sudoku(examples[7], 4)
 sudoku_thread = QThread()
 
 
 def start_solve():
 	sudoku.moveToThread(sudoku_thread)
 	sudoku.step_done.connect(update_grid_layout)
-	sudoku_thread.started.connect(sudoku.start_solve)
+	sudoku.finished.connect(sudoku_thread.exit)
+
+	if not sudoku.is_solved:
+		sudoku_thread.started.connect(sudoku.start_solve)
+
 	sudoku_thread.start()
+
+
+def show_solution():
+	if sudoku.is_solved:
+		jump_to_end()
+		return
+
+	sudoku.pause_between_steps = False
+	start_solve()
+	toggle_calculating_solution(True)
+	sudoku.finished.connect(toggle_calculating_solution)
+
+
+def toggle_calculating_solution(calculating=False):
+	show_solution_button.setText("Calculating solution..." if calculating else "Show solution")
 
 
 def toggle_paused():
@@ -765,11 +798,14 @@ def toggle_paused():
 		pause_button.setIcon(QIcon("icons//pause.png"))
 		sudoku.paused = False
 
+		start_solve()
+
 
 def previous_step():
-	if sudoku.current_step == 0:
+	if sudoku.current_step == 1:
 		return
 
+	sudoku.paused = True
 	sudoku.current_step -= 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
@@ -780,6 +816,26 @@ def next_step():
 		return
 
 	sudoku.current_step += 1
+	sudoku.grid = sudoku.steps[sudoku.current_step]
+	update_grid_layout(sudoku.current_step, True)
+
+
+def jump_to_start():
+	if sudoku.current_step == 1:
+		return
+
+	sudoku.paused = True
+	sudoku.current_step = 1
+	sudoku.grid = sudoku.steps[sudoku.current_step]
+	update_grid_layout(sudoku.current_step, True)
+
+
+def jump_to_end():
+	if sudoku.current_step == len(sudoku.steps) - 1:
+		return
+
+	sudoku.paused = True
+	sudoku.current_step = len(sudoku.steps) - 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
 
@@ -820,30 +876,45 @@ drawings = QGridLayout()
 drawings_widget.setLayout(drawings)
 grid_window_layout.addWidget(drawings_widget, 0, 0)
 
+show_solution_button = QPushButton()
+show_solution_button.setText("Show solution")
+show_solution_button.clicked.connect(show_solution)
+main_window_layout.addWidget(show_solution_button, 2, 0)
+
 solve_button = QPushButton()
 solve_button.setText("Start solving...")
 solve_button.clicked.connect(start_solve)
-main_window_layout.addWidget(solve_button, 2, 0)
-
-pause_button = QPushButton()
-pause_button.setIcon(QIcon("icons//pause.png"))
-pause_button.clicked.connect(toggle_paused)
-main_window_layout.addWidget(pause_button, 3, 0)
+main_window_layout.addWidget(solve_button, 3, 0)
 
 navigation_widget = QWidget()
 navigation_layout = QGridLayout()
 navigation_widget.setLayout(navigation_layout)
 main_window_layout.addWidget(navigation_widget, 4, 0)
 
+jump_to_start_button = QPushButton()
+jump_to_start_button.setIcon(QIcon("icons//left-jump.png"))
+jump_to_start_button.clicked.connect(jump_to_start)
+navigation_layout.addWidget(jump_to_start_button, 0, 0, 0, 1)
+
 previous_button = QPushButton()
 previous_button.setIcon(QIcon("icons//left-arrow.png"))
 previous_button.clicked.connect(previous_step)
-navigation_layout.addWidget(previous_button, 0, 0)
+navigation_layout.addWidget(previous_button, 0, 1, 0, 3)
+
+pause_button = QPushButton()
+pause_button.setIcon(QIcon("icons//pause.png"))
+pause_button.clicked.connect(toggle_paused)
+navigation_layout.addWidget(pause_button, 0, 4, 0, 2)
 
 next_button = QPushButton()
 next_button.setIcon(QIcon("icons//right-arrow.png"))
 next_button.clicked.connect(next_step)
-navigation_layout.addWidget(next_button, 0, 1)
+navigation_layout.addWidget(next_button, 0, 6, 0, 3)
+
+jump_to_end_button = QPushButton()
+jump_to_end_button.setIcon(QIcon("icons//right-jump.png"))
+jump_to_end_button.clicked.connect(jump_to_end)
+navigation_layout.addWidget(jump_to_end_button, 0, 9, 0, 1)
 
 
 update_grid_layout()
