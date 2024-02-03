@@ -394,18 +394,18 @@ class Sudoku(QObject):
 	def conflicts(self, row_index, column_index, n, return_early=False):
 		size = self.box_size
 
-		in_same_row = [square for square in self.get_row(row_index) if square == n]
+		in_same_row = [square.pos for square in self.get_row(row_index) if square == n]
 
 		if len(in_same_row) > 0 and return_early:
 			return in_same_row
 
-		in_same_column = [square for square in self.get_column(column_index) if square == n]
+		in_same_column = [square.pos for square in self.get_column(column_index) if square == n]
 
 		if len(in_same_column) > 0 and return_early:
 			return in_same_column
 
 		box_index = (row_index // size)*size + (column_index // size)
-		in_same_box = [square for square in self.get_box(box_index) if square == n]
+		in_same_box = [square.pos for square in self.get_box(box_index) if square == n]
 
 		if len(in_same_box) > 0 and return_early:
 			return in_same_box
@@ -570,15 +570,13 @@ def highlight_sequence(sequence):
 def circle_squares(squares):
 	square_width = window_size / sudoku.grid_size
 
-	for i, square in enumerate(squares):
+	for i, pos in enumerate(squares):
 		# Avoid drawing two circles on the same square.
-		if any(other_square.pos == square.pos for other_square in squares[:i]):
+		if pos in squares[:i]:
 			continue
 
-		print(i)
-
-		x = round(square_width * square.pos[1] + square_width/2)
-		y = round(square_width * square.pos[0] + square_width/2)
+		x = round(square_width * pos[1] + square_width/2)
+		y = round(square_width * pos[0] + square_width/2)
 
 		center = QPoint(x, y)
 
