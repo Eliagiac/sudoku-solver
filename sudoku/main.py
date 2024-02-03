@@ -97,6 +97,52 @@ class Rectangle(QWidget):
 		painter.drawRect(self.x, self.y, self.w, self.h)
 
 
+class Circle(QWidget):
+	color = Qt.red
+	stroke_width = 3
+
+	center = 0
+	r = 0
+
+	def __init__(self, center, r, color=Qt.red, stroke_width=3):
+		super().__init__()
+		self.center = center
+		self.r = r
+		self.color = color
+		self.stroke_width = stroke_width
+
+	def paintEvent(self, event):
+		painter = QPainter(self)
+		pen = QPen()
+
+		pen.setWidth(self.stroke_width)
+		pen.setColor(self.color)
+		painter.setPen(pen)
+
+		painter.drawEllipse(self.center, self.r, self.r)
+
+
+class Cross(QWidget):
+	color = Qt.red
+	stroke_width = 3
+
+	center = 0
+
+	def __init__(self, center, color=Qt.red, stroke_width=3):
+		super().__init__()
+		self.center = center
+		self.color = color
+		self.stroke_width = stroke_width
+
+	def paintEvent(self, event):
+		painter = QPainter(self)
+		pen = QPen()
+
+		pen.setWidth(self.stroke_width)
+		pen.setColor(self.color)
+		painter.setPen(pen)
+
+
 # Each square also stores its position in the squares array (indexed by [row][column])
 class Square:
 	pos = []
@@ -137,14 +183,18 @@ class Explanation:
 
 	# Each line is stored as [from_square_pos][to_square_pos].
 	crossed_lines = []
-	crossed_squares = []
 
-	def __init__(self, text, modified_square_pos=None, affected_sequence=None, crossed_lines=None, crossed_squares=None):
+	crossed_squares = []
+	circled_squares = []
+
+	def __init__(self, text, modified_square_pos=None, affected_sequence=None,
+				 crossed_lines=None, crossed_squares=None, circled_squares=None):
 		self.text = text
 		self.modified_square_pos = modified_square_pos
 		self.affected_sequence = affected_sequence
 		self.crossed_lines = crossed_lines
 		self.crossed_squares = crossed_squares
+		self.circled_squares = circled_squares
 
 
 class Sudoku(QObject):
@@ -155,7 +205,7 @@ class Sudoku(QObject):
 
 	box_size = 0
 	grid_size = 0
-	
+
 	all_possible_numbers = []
 
 	initial_rows = []
@@ -180,7 +230,7 @@ class Sudoku(QObject):
 		super().__init__()
 		self.box_size = box_size
 		self.grid_size = box_size ** 2
-		
+
 		self.all_possible_numbers = range(1, self.grid_size + 1)
 
 		self.initial_rows = rows
@@ -341,27 +391,49 @@ class Sudoku(QObject):
 
 		return missing_digits
 
-	def could_contain(self, row_index, column_index, n):
+	def conflicts(self, row_index, column_index, n, return_early=False):
 		size = self.box_size
-		in_same_row = n in self.get_row(row_index)
-		in_same_column = n in self.get_column(column_index)
-		in_same_box = n in self.get_box((row_index // size)*size + (column_index // size))
 
-		return not in_same_row and not in_same_column and not in_same_box
+		in_same_row = [square for square in self.get_row(row_index) if square == n]
+
+		if len(in_same_row) > 0 and return_early:
+			return in_same_row
+
+		in_same_column = [square for square in self.get_column(column_index) if square == n]
+
+		if len(in_same_column) > 0 and return_early:
+			return in_same_column
+
+		box_index = (row_index // size)*size + (column_index // size)
+		in_same_box = [square for square in self.get_box(box_index) if square == n]
+
+		if len(in_same_box) > 0 and return_early:
+			return in_same_box
+
+		return in_same_row + in_same_column + in_same_box
+
+	def could_contain(self, row_index, column_index, n):
+		return len(self.conflicts(row_index, column_index, n, return_early=True)) == 0
 
 	def possible_squares(self, sequence, n):
 		possible_squares = []
+		conflicts = []
+
 		for pos in empty_squares(sequence):
-			if self.could_contain(pos[0], pos[1], n):
+			new_conflicts = self.conflicts(pos[0], pos[1], n)
+			conflicts += new_conflicts
+
+			if len(new_conflicts) == 0:
 				possible_squares.append(pos)
 
-		return possible_squares
+		return possible_squares, conflicts
 
 	def fill_single_possible_squares(self):
 		for sequence in self.get_all_sequences():
 			missing_digits = self.missing_digits(sequence)
 			for n in missing_digits:
-				possible_squares = self.possible_squares(sequence, n)
+				(possible_squares, conflicts) = self.possible_squares(sequence, n)
+
 				if len(possible_squares) == 1:
 					pos = possible_squares[0]
 
@@ -369,7 +441,7 @@ class Sudoku(QObject):
 					self.steps_differences.append(pos)
 					self.explanations.append(Explanation(
 						f"There is only one square in the sequence where {n} could go.",
-						pos, sequence))
+						pos, sequence, circled_squares=conflicts))
 					return True
 
 		return False
@@ -383,7 +455,7 @@ class Sudoku(QObject):
 			for n in self.all_possible_numbers:
 				if self.could_contain(pos[0], pos[1], n):
 					self.candidates[pos[0]][pos[1]].append(n)
-	
+
 	def fill_squares_with_one_candidate(self, using_candidate_groups=False):
 		for pos in empty_squares([square for row in self.get_rows() for square in row]):
 			candidates = self.candidates[pos[0]][pos[1]]
@@ -495,6 +567,27 @@ def highlight_sequence(sequence):
 	drawings.addWidget(Rectangle(x, y, w, h), 0, 0)
 
 
+def circle_squares(squares):
+	square_width = window_size / sudoku.grid_size
+
+	for i, square in enumerate(squares):
+		# Avoid drawing two circles on the same square.
+		if any(other_square.pos == square.pos for other_square in squares[:i]):
+			continue
+
+		print(i)
+
+		x = round(square_width * square.pos[1] + square_width/2)
+		y = round(square_width * square.pos[0] + square_width/2)
+
+		center = QPoint(x, y)
+
+		center_width = 0.8
+		r = (square_width/2) * center_width
+
+		drawings.addWidget(Circle(center, r), 0, 0)
+
+
 def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True):
 	clear_grid_layout()
 
@@ -507,6 +600,9 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 
 		if explanation.affected_sequence is not None and len(explanation.affected_sequence) > 0:
 			highlight_sequence(explanation.affected_sequence)
+
+		if explanation.circled_squares is not None and len(explanation.circled_squares) > 0:
+			circle_squares(explanation.circled_squares)
 
 	step_difference = sudoku.steps_differences[current_step-show_previous_difference]
 
