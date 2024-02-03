@@ -99,6 +99,25 @@ class Square:
 		return self.n == 0
 
 
+class Explanation:
+	text = ""
+
+	modified_square_pos = None
+
+	affected_sequence = []
+
+	# Each line is stored as [from_square_pos][to_square_pos].
+	crossed_lines = []
+	crossed_squares = []
+
+	def __init__(self, text, modified_square_pos=None, affected_sequence=None, crossed_lines=None, crossed_squares=None):
+		self.text = text
+		self.modified_square_pos = modified_square_pos
+		self.affected_sequence = affected_sequence
+		self.crossed_lines = crossed_lines
+		self.crossed_squares = crossed_squares
+
+
 class Sudoku(QObject):
 	finished = pyqtSignal()
 	step_done = pyqtSignal()
@@ -119,6 +138,7 @@ class Sudoku(QObject):
 	# Stores the grid state after each step.
 	steps = []
 	steps_differences = []
+	explanations = []
 
 	current_step = 0
 
@@ -141,6 +161,7 @@ class Sudoku(QObject):
 
 		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
 		self.steps_differences.append([-1, -1])
+		self.explanations.append(Explanation("Starting grid"))
 
 	def set_square(self, pos, n):
 		self.grid[pos[0]][pos[1]] = Square([pos[0], pos[1]], n)
@@ -247,7 +268,7 @@ class Sudoku(QObject):
 				print(f"Created {groups_count} groups.")
 
 			# Fill squares that have only one candidate after groups have been formed
-			if self.fill_squares_with_one_candidate():
+			if self.fill_squares_with_one_candidate(True):
 				self.max_difficulty = max(self.max_difficulty, 3)
 				print("Difficulty: 4")
 				continue
@@ -264,8 +285,12 @@ class Sudoku(QObject):
 			if i != -1:
 				pos = sequence[i].pos
 
-				self.set_square(pos, self.first_missing_digit(sequence))
+				n = self.first_missing_digit(sequence)
+				self.set_square(pos, n)
 				self.steps_differences.append(pos)
+				self.explanations.append(Explanation(
+					f"Only one empty square remaining in the sequence. The only number missing is {n}",
+					pos, sequence))
 				return True
 
 		return False
@@ -310,11 +335,12 @@ class Sudoku(QObject):
 				possible_squares = self.possible_squares(sequence, n)
 				if len(possible_squares) == 1:
 					pos = possible_squares[0]
-					if pos[0] == 0 and pos[1] == 0 and n == 3:
-						print("!")
 
 					self.set_square(pos, n)
 					self.steps_differences.append(pos)
+					self.explanations.append(Explanation(
+						f"There is only one square in the sequence where {n} could go.",
+						pos, sequence))
 					return True
 
 		return False
@@ -329,13 +355,22 @@ class Sudoku(QObject):
 				if self.could_contain(pos[0], pos[1], n):
 					self.candidates[pos[0]][pos[1]].append(n)
 	
-	def fill_squares_with_one_candidate(self):
+	def fill_squares_with_one_candidate(self, using_candidate_groups=False):
 		for pos in empty_squares([square for row in self.get_rows() for square in row]):
 			candidates = self.candidates[pos[0]][pos[1]]
 
 			if len(candidates) == 1:
-				self.set_square(pos, candidates[0])
+				n = candidates[0]
+				self.set_square(pos, n)
 				self.steps_differences.append(pos)
+
+				explanation = ""
+				if not using_candidate_groups:
+					explanation = f"There is only one number ({n}) that could go in this square."
+				else:
+					explanation = f"There is only one number ({n}) that could go in this square (using candidate groups)."
+
+				self.explanations.append(Explanation(explanation, pos))
 				return True
 
 		return False
@@ -416,6 +451,13 @@ def clear_grid_layout():
 
 def update_grid_layout(current_step=-1, show_previous_difference=False):
 	clear_grid_layout()
+
+	explanation = None
+	if len(sudoku.explanations) > 0:
+		explanation = sudoku.explanations[current_step-show_previous_difference]
+
+	if explanation is not None:
+		explanation_label.setText(explanation.text)
 
 	for i in range(sudoku.grid_size):
 		for j in range(sudoku.grid_size):
@@ -507,7 +549,7 @@ examples = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(examples[7], 4)
+sudoku = Sudoku(examples[5], 3)
 sudoku_thread = QThread()
 
 
@@ -552,10 +594,15 @@ main_window = QWidget()
 main_window_layout = QGridLayout()
 main_window.setLayout(main_window_layout)
 
+explanation_label = QLabel()
+explanation_label.setFont(QFont('Times', 12))
+explanation_label.setAlignment(Qt.AlignCenter)
+main_window_layout.addWidget(explanation_label, 0, 0)
+
 grid_window = QWidget()
 grid_window_layout = QGridLayout()
 grid_window.setLayout(grid_window_layout)
-main_window_layout.addWidget(grid_window, 0, 0)
+main_window_layout.addWidget(grid_window, 1, 0)
 
 grid_widget = QWidget()
 grid_layout = QGridLayout()
@@ -576,17 +623,17 @@ grid_window_layout.addWidget(background_widget, 0, 0)
 solve_button = QPushButton()
 solve_button.setText("Start solving...")
 solve_button.clicked.connect(start_solve)
-main_window_layout.addWidget(solve_button, 1, 0)
+main_window_layout.addWidget(solve_button, 2, 0)
 
 pause_button = QPushButton()
 pause_button.setIcon(QIcon("icons//pause.png"))
 pause_button.clicked.connect(toggle_paused)
-main_window_layout.addWidget(pause_button, 2, 0)
+main_window_layout.addWidget(pause_button, 3, 0)
 
 navigation_widget = QWidget()
 navigation_layout = QGridLayout()
 navigation_widget.setLayout(navigation_layout)
-main_window_layout.addWidget(navigation_widget, 3, 0)
+main_window_layout.addWidget(navigation_widget, 4, 0)
 
 previous_button = QPushButton()
 previous_button.setIcon(QIcon("icons//left-arrow.png"))
