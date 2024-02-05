@@ -12,7 +12,7 @@ window_size = 600
 bg_margin_size = [18, 18]
 grid_margin_size = [9, 9]
 
-time_between_steps = 1
+time_between_steps = 0.05
 
 
 class GridBackgroundWidget(QWidget):
@@ -194,15 +194,23 @@ class Explanation:
 
 	crossed_squares = []
 	circled_squares = []
+	boxed_squares = []
+
+	candidates = []
+	candidates_red = []
 
 	def __init__(self, text, modified_square_pos=None, affected_sequence=None,
-				 crossed_lines=None, crossed_squares=None, circled_squares=None):
+				 crossed_lines=None, crossed_squares=None, circled_squares=None, boxed_squares=None,
+				 candidates=None, candidates_red=None):
 		self.text = text
 		self.modified_square_pos = modified_square_pos
 		self.affected_sequence = affected_sequence
 		self.crossed_lines = crossed_lines
 		self.crossed_squares = crossed_squares
 		self.circled_squares = circled_squares
+		self.boxed_squares = boxed_squares
+		self.candidates = candidates
+		self.candidates_red = candidates_red
 
 
 class Sudoku(QObject):
@@ -237,6 +245,8 @@ class Sudoku(QObject):
 	pause_between_steps = True
 	update_gui = True
 	should_reset_gui_settings = False
+
+	notes = {"Groups": [], "Candidates": []}
 
 	def __init__(self, rows, box_size):
 		super().__init__()
@@ -318,10 +328,10 @@ class Sudoku(QObject):
 		if self.is_solved:
 			self.current_step += 1
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
-			self.explanations.append(Explanation("Puzzle is solved."))
+			self.explanations.append(Explanation(f"Puzzle is solved. (Max difficulty: {self.max_difficulty})"))
 
 		else:
-			self.explanations.append(Explanation("Couldn't solve the puzzle."))
+			self.explanations.append(Explanation(f"Couldn't solve the puzzle. (Max difficulty: {self.max_difficulty})"))
 
 		self.step_done.emit()
 		self.finished.emit()
@@ -340,6 +350,8 @@ class Sudoku(QObject):
 			if self.total_steps >= max_tries:
 				self.solve_failed = True
 				return False
+
+			self.notes["Groups"] = []
 
 			print_grid(self.grid)
 			self.current_step += 1
@@ -378,14 +390,16 @@ class Sudoku(QObject):
 				print("Difficulty: 3")
 				continue
 
+			# Backup the candidates grid to use for explanations.
+			self.notes["Candidates"] = [[candidates.copy() for candidates in row] for row in self.candidates]
+
 			groups_count = self.create_groups_with_same_candidates()
 			if groups_count != 0:
-				self.max_difficulty = max(self.max_difficulty, 4)
 				print(f"Created {groups_count} groups.")
 
 			# Fill squares that have only one candidate after groups have been formed
 			if self.fill_squares_with_one_candidate(True):
-				self.max_difficulty = max(self.max_difficulty, 3)
+				self.max_difficulty = max(self.max_difficulty, 4)
 				print("Difficulty: 4")
 				continue
 
@@ -405,7 +419,7 @@ class Sudoku(QObject):
 				n = self.first_missing_digit(sequence)
 				self.set_square(pos, n)
 				self.explanations.append(Explanation(
-					f"Only one empty square remaining in the sequence. The only number missing is {n}.",
+					f"Only {n} is missing in this sequence.",
 					pos, sequence))
 				return True
 
@@ -505,20 +519,24 @@ class Sudoku(QObject):
 				n = candidates[0]
 				self.set_square(pos, n)
 
-				explanation = ""
 				circled_squares = []
+				old_candidates = []
+				for excluded_number in self.all_possible_numbers:
+					if excluded_number == n:
+						continue
+
+					circled_squares += self.conflicts(pos[0], pos[1], excluded_number)
+
 				if not using_candidate_groups:
 					explanation = f"{n} is the only number that could go in this square."
-					for excluded_number in self.all_possible_numbers:
-						if excluded_number == n:
-							continue
-
-						circled_squares += self.conflicts(pos[0], pos[1], excluded_number)
 
 				else:
 					explanation = f"{n} is the only number that could go in this square (using candidate groups)."
+					old_candidates = [candidate for candidate in self.notes["Candidates"][pos[0]][pos[1]] if candidate != n]
 
-				self.explanations.append(Explanation(explanation, pos, circled_squares=circled_squares))
+				self.explanations.append(Explanation(explanation, pos, circled_squares=circled_squares,
+													 candidates=[(pos, candidates)] if using_candidate_groups else [],
+													 candidates_red=[(pos, old_candidates)]))
 				return True
 
 		return False
@@ -544,6 +562,7 @@ class Sudoku(QObject):
 				# we've exhausted the locations these numbers could go in.
 				if len(group) == len(candidates):
 					groups_count += 1
+					self.notes["Groups"].append((group, candidates))
 
 					for other_pos in positions:
 						for candidate in candidates:
@@ -671,6 +690,37 @@ def cross_squares(squares):
 		drawings.addWidget(Line(line2_x1, line2_y1, line2_x2, line2_y2), 0, 0)
 
 
+def show_candidates(candidates, candidates_red=None):
+	candidates_widget = QWidget()
+	candidates_layout = QHBoxLayout()
+	candidates_layout.setSpacing(0)
+	candidates_widget.setLayout(candidates_layout)
+
+	if candidates_red is not None and len(candidates_red) > 0:
+		label_red = QLabel(' '.join([str(n) for n in candidates_red]))
+		label_red.setFont(QFont('Times', 10))
+		label_red.setStyleSheet(" color: red ")
+		label_red.setAlignment(Qt.AlignLeft)
+		label_red.setAlignment(Qt.AlignTop)
+		label_red.adjustSize()
+
+		candidates_layout.addWidget(label_red)
+
+	label_gray = QLabel(' '.join([str(n) for n in candidates]))
+	label_gray.setFont(QFont('Times', 10))
+	label_gray.setStyleSheet(" color: #5a5a5a ")
+	label_gray.setAlignment(Qt.AlignLeft)
+	label_gray.setAlignment(Qt.AlignTop)
+	label_gray.adjustSize()
+
+	candidates_layout.addWidget(label_gray)
+
+	empty = QWidget()
+	candidates_layout.addWidget(empty)
+
+	return candidates_widget
+
+
 def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True):
 	# Only update the UI if we are in a step-by-step solution
 	if not sudoku.pause_between_steps:
@@ -679,9 +729,10 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 	clear_grid_layout()
 
 	explanation = None
-	if len(sudoku.explanations) > 0:
+	if len(sudoku.explanations) > 1 or (len(sudoku.explanations) == 1 and not show_previous_difference):
 		explanation = sudoku.explanations[current_step-show_previous_difference]
 
+	squares_with_candidates = []
 	if explanation is not None and show_explanations:
 		explanation_label.setText(explanation.text)
 
@@ -708,6 +759,20 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 					label.setStyleSheet("QLabel { background-color : green; }")
 
 			grid_layout.addWidget(label, i, j)
+
+	if explanation.candidates is not None and len(explanation.candidates) > 0:
+		for i in range(sudoku.grid_size):
+			for j in range(sudoku.grid_size):
+				has_candidates = False
+				for k, candidates in enumerate(explanation.candidates):
+					if candidates[0] == [i, j]:
+						has_candidates = True
+						grid_layout.addWidget(show_candidates(candidates[1], explanation.candidates_red[k][1]), i, j)
+						break
+
+				if not has_candidates:
+					grid_layout.addWidget(QWidget(), i, j)
+
 
 
 examples = [
@@ -788,7 +853,7 @@ examples = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(examples[7], 4)
+sudoku = Sudoku(examples[6], 3)
 sudoku_thread = QThread()
 
 
@@ -843,7 +908,7 @@ def pause_once():
 def previous_step():
 	toggle_paused(True)
 
-	if sudoku.current_step == 1:
+	if sudoku.current_step <= 1:
 		return
 
 	sudoku.current_step -= 1
