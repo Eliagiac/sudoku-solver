@@ -351,8 +351,6 @@ class Sudoku(QObject):
 				self.solve_failed = True
 				return False
 
-			self.notes["Groups"] = []
-
 			print_grid(self.grid)
 			self.current_step += 1
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
@@ -393,6 +391,7 @@ class Sudoku(QObject):
 			# Backup the candidates grid to use for explanations.
 			self.notes["Candidates"] = [[candidates.copy() for candidates in row] for row in self.candidates]
 
+			self.notes["Groups"] = []
 			groups_count = self.create_groups_with_same_candidates()
 			if groups_count != 0:
 				print(f"Created {groups_count} groups.")
@@ -534,9 +533,11 @@ class Sudoku(QObject):
 					explanation = f"{n} is the only number that could go in this square (using candidate groups)."
 					old_candidates = [candidate for candidate in self.notes["Candidates"][pos[0]][pos[1]] if candidate != n]
 
-				self.explanations.append(Explanation(explanation, pos, circled_squares=circled_squares,
-													 candidates=[(pos, candidates)] if using_candidate_groups else [],
-													 candidates_red=[(pos, old_candidates)]))
+				candidates_notes = [(pos, candidates)] + [(other_pos, group[1]) for group in self.notes["Groups"] if pos in group[2] for other_pos in group[0]]
+				self.explanations.append(Explanation(
+					explanation, pos, circled_squares=circled_squares,
+					candidates=candidates_notes if using_candidate_groups else [],
+					candidates_red=[(pos, old_candidates)]))
 				return True
 
 		return False
@@ -550,6 +551,9 @@ class Sudoku(QObject):
 			positions = empty_squares(sequence)
 			for i, pos in enumerate(positions):
 				candidates = self.candidates[pos[0]][pos[1]]
+				if len(candidates) <= 1:
+					continue
+
 				group = [pos]
 
 				for other_pos in positions[i+1:]:
@@ -562,12 +566,18 @@ class Sudoku(QObject):
 				# we've exhausted the locations these numbers could go in.
 				if len(group) == len(candidates):
 					groups_count += 1
-					self.notes["Groups"].append((group, candidates))
 
+					affected_squares = []
 					for other_pos in positions:
+						if other_pos in group:
+							continue
+
 						for candidate in candidates:
 							if candidate in self.candidates[other_pos[0]][other_pos[1]]:
 								self.candidates[other_pos[0]][other_pos[1]].remove(candidate)
+								affected_squares.append(other_pos)
+
+					self.notes["Groups"].append((group, candidates, affected_squares))
 
 		return groups_count
 
@@ -853,7 +863,7 @@ examples = [
 	 [ 6,  0, 11, 13,  0,  0,  0,  0,  2,  9,  0, 12, 10,  0,  0,  0],
 	 [12,  0,  4,  0, 16,  9,  7,  0,  0,  0,  0, 10,  0,  0,  5,  6]]
 ]
-sudoku = Sudoku(examples[6], 3)
+sudoku = Sudoku(examples[5], 3)
 sudoku_thread = QThread()
 
 
