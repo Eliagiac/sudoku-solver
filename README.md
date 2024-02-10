@@ -4,7 +4,7 @@
 
 ## Overview
 
-Welcome to my Python Sudoku Solver. This project aims to provide a simple yet efficient Sudoku Solver, along with a GUI made with PyQt5. Part of the project is that I'm contstraining myself to exclusively using strategies that I have personally come up with, adding a distinctive touch to the program's problem-solving techniques.
+Welcome to my Python Sudoku Solver. This project aims to provide a simple yet efficient Sudoku Solver, along with a GUI made with PyQt5. Part of the project is that I'm constraining myself to exclusively using strategies that I have personally come up with, adding a distinctive touch to the program's problem-solving techniques.
 
 ## Getting Started
 
