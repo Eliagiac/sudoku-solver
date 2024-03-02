@@ -394,15 +394,23 @@ class Sudoku(QObject):
 			# Backup the candidates grid to use for explanations.
 			self.notes["Candidates"] = [[candidates.copy() for candidates in row] for row in self.candidates]
 
+			self.eliminate_candidates()
+
+			# Fill squares that have only one candidate after eliminations.
+			if self.fill_squares_with_one_candidate(True):
+				self.max_difficulty = max(self.max_difficulty, 4)
+				print("Difficulty: 4")
+				continue
+
 			self.notes["Groups"] = []
 			groups_count = self.create_groups_with_same_candidates()
 			if groups_count != 0:
 				print(f"Created {groups_count} groups.")
 
-			# Fill squares that have only one candidate after groups have been formed
+			# Fill squares that have only one candidate after groups have been formed.
 			if self.fill_squares_with_one_candidate(True):
 				self.max_difficulty = max(self.max_difficulty, 4)
-				print("Difficulty: 4")
+				print("Difficulty: 5")
 				continue
 
 			self.solve_failed = True
@@ -545,6 +553,33 @@ class Sudoku(QObject):
 				return True
 
 		return False
+
+	# If box 1 has two positions where the number 8 could be, both in
+	# the same row, no other squares in that row may contain an 8.
+	def eliminate_candidates(self):
+		for sequence in self.get_all_sequences():
+			positions = empty_squares(sequence)
+			for n in self.all_possible_numbers:
+				possible_squares = [pos for pos in positions if n in self.candidates[pos[0]][pos[1]]]
+
+				if len(possible_squares) < 2:
+					continue
+
+				for other_sequence in self.get_all_sequences():
+					if other_sequence == sequence:
+						continue
+
+					other_sequence_positions = [square.pos for square in other_sequence]
+
+					if all(pos in other_sequence_positions for pos in possible_squares):
+						for pos in other_sequence_positions:
+							if pos in positions:
+								continue
+								
+							if n in self.candidates[pos[0]][pos[1]]:
+								self.candidates[pos[0]][pos[1]].remove(n)
+
+						break
 
 	# If [0, 0] and [0, 1] definitely contain either a 1 or a 2, no other squares in the first row and the first box
 	# can have a 1 or a 2. For this to be true, the number of squares affected must equal the amount of numbers used.
