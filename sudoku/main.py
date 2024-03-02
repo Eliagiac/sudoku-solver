@@ -151,7 +151,7 @@ class Line(QWidget):
 		painter.drawLine(self.x1, self.y1, self.x2, self.y2)
 
 
-# Each square also stores its position in the squares array (indexed by [row][column])
+# Each square also stores its position in the squares array (indexed by [row][column]).
 class Square:
 	pos = []
 	n = 0
@@ -331,7 +331,10 @@ class Sudoku(QObject):
 			self.explanations.append(Explanation(f"Puzzle is solved. (Max difficulty: {self.max_difficulty})"))
 
 		else:
-			self.explanations.append(Explanation(f"Couldn't solve the puzzle. (Max difficulty: {self.max_difficulty})"))
+			self.explanations.append(Explanation(
+				f"Couldn't solve the puzzle. (Max difficulty: {self.max_difficulty})",
+				candidates=self.candidates)
+			)
 
 		self.step_done.emit()
 		self.finished.emit()
@@ -537,7 +540,8 @@ class Sudoku(QObject):
 				self.explanations.append(Explanation(
 					explanation, pos, circled_squares=circled_squares,
 					candidates=candidates_notes if using_candidate_groups else [],
-					candidates_red=[(pos, old_candidates)]))
+					candidates_red=[(pos, old_candidates)])
+				)
 				return True
 
 		return False
@@ -773,16 +777,12 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 	if explanation.candidates is not None and len(explanation.candidates) > 0:
 		for i in range(sudoku.grid_size):
 			for j in range(sudoku.grid_size):
-				has_candidates = False
-				for k, candidates in enumerate(explanation.candidates):
-					if candidates[0] == [i, j]:
-						has_candidates = True
-						grid_layout.addWidget(show_candidates(candidates[1], explanation.candidates_red[k][1]), i, j)
-						break
+				has_red_candidates = explanation.candidates_red is not None and len(explanation.candidates_red[i][j]) > 0
 
-				if not has_candidates:
-					grid_layout.addWidget(QWidget(), i, j)
-
+				grid_layout.addWidget(show_candidates(
+					explanation.candidates[i][j],
+					explanation.candidates_red[i][j] if has_red_candidates else None
+				), i, j)
 
 
 examples = [
