@@ -394,7 +394,9 @@ class Sudoku(QObject):
 			# Backup the candidates grid to use for explanations.
 			self.notes["Candidates"] = [[candidates.copy() for candidates in row] for row in self.candidates]
 
-			self.eliminate_candidates()
+			eliminations_count = self.eliminate_candidates()
+			if eliminations_count != 0:
+				print(f"Removed {eliminations_count} candidates by elimination.")
 
 			# Fill squares that have only one candidate after eliminations.
 			if self.fill_squares_with_one_candidate(True):
@@ -557,6 +559,7 @@ class Sudoku(QObject):
 	# If box 1 has two positions where the number 8 could be, both in
 	# the same row, no other squares in that row may contain an 8.
 	def eliminate_candidates(self):
+		eliminations_count = 0
 		for sequence in self.get_all_sequences():
 			positions = empty_squares(sequence)
 			for n in self.all_possible_numbers:
@@ -575,17 +578,19 @@ class Sudoku(QObject):
 						for pos in other_sequence_positions:
 							if pos in positions:
 								continue
-								
+
 							if n in self.candidates[pos[0]][pos[1]]:
 								self.candidates[pos[0]][pos[1]].remove(n)
+								eliminations_count += 1
 
 						break
+
+		return eliminations_count
 
 	# If [0, 0] and [0, 1] definitely contain either a 1 or a 2, no other squares in the first row and the first box
 	# can have a 1 or a 2. For this to be true, the number of squares affected must equal the amount of numbers used.
 	def create_groups_with_same_candidates(self):
 		groups_count = 0
-
 		for sequence in self.get_all_sequences():
 			positions = empty_squares(sequence)
 			for i, pos in enumerate(positions):
