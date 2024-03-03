@@ -530,14 +530,16 @@ class Sudoku(QObject):
 				self.set_square(pos, n)
 
 				circled_squares = []
-				old_candidates = []
 				for excluded_number in self.all_possible_numbers:
 					if excluded_number == n:
 						continue
 
 					circled_squares += self.conflicts(pos[0], pos[1], excluded_number)
 
-				self.explanations.append(Explanation(f"{n} is the only number that could go in this square.", pos))
+				self.explanations.append(Explanation(
+					f"{n} is the only number that could go in this square.", pos,
+					circled_squares=circled_squares
+				))
 
 				return True
 
