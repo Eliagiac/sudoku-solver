@@ -346,6 +346,7 @@ class Sudoku(QObject):
 
 	def solve(self):
 		self.total_steps = 0
+		self.compute_candidates()
 		while any(square.is_empty() for row in self.grid for square in row):
 			if not self.is_valid():
 				print("Error occurred while solving.")
@@ -383,9 +384,7 @@ class Sudoku(QObject):
 				self.complete_step(2)
 				continue
 
-			if self.candidates_outdated:
-				self.compute_candidates()
-				self.candidates_outdated = False
+			self.update_candidates()
 
 			# Fill squares that have only one candidate number (all other numbers are already in the same row/column/box)
 			if self.fill_squares_with_one_candidate():
@@ -396,15 +395,15 @@ class Sudoku(QObject):
 			self.notes["Candidates"] = [[candidates.copy() for candidates in row] for row in self.candidates]
 
 			if self.remove_candidates_by_elimination():
-				self.complete_step(4, False)
+				self.complete_step(4)
 				continue
 
 			if self.create_disjoint_subsets():
-				self.complete_step(5, False)
+				self.complete_step(5)
 				continue
 
 			if self.create_groups_with_same_candidates():
-				self.complete_step(6, False)
+				self.complete_step(6)
 				continue
 
 			self.solve_failed = True
@@ -413,11 +412,9 @@ class Sudoku(QObject):
 		print_grid(self.grid)
 		return True
 
-	def complete_step(self, difficulty, set_candidates_outdated=True):
+	def complete_step(self, difficulty):
 		self.max_difficulty = max(self.max_difficulty, difficulty)
 		print(f"Difficulty: {difficulty}")
-		if set_candidates_outdated:
-			self.candidates_outdated = True
 
 	def fill_single_empty_squares(self):
 		for sequence in self.get_all_sequences():
@@ -520,6 +517,12 @@ class Sudoku(QObject):
 			for n in self.all_possible_numbers:
 				if self.could_contain(pos[0], pos[1], n):
 					self.candidates[pos[0]][pos[1]].append(n)
+
+	def update_candidates(self):
+		for pos in empty_squares([square for row in self.get_rows() for square in row]):
+			for n in self.candidates[pos[0]][pos[1]]:
+				if not self.could_contain(pos[0], pos[1], n):
+					self.candidates[pos[0]][pos[1]].remove(n)
 
 	def fill_squares_with_one_candidate(self):
 		for pos in empty_squares([square for row in self.get_rows() for square in row]):
