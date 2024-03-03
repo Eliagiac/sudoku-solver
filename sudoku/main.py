@@ -253,6 +253,8 @@ class Sudoku(QObject):
 	is_solved = False
 	solve_failed = False
 
+	candidates_outdated = True
+
 	pause_between_steps = True
 	update_gui = True
 	should_reset_gui_settings = False
@@ -384,22 +386,21 @@ class Sudoku(QObject):
 
 			# Fill squares that are the only empty square in a row/column/box.
 			if self.fill_single_empty_squares():
-				self.max_difficulty = max(self.max_difficulty, 1)
-				print("Difficulty: 1")
+				self.complete_step(1)
 				continue
 
 			# Fill squares that are the only possible square where a digit could go in a row/column/box.
 			if self.fill_single_possible_squares():
-				self.max_difficulty = max(self.max_difficulty, 2)
-				print("Difficulty: 2")
+				self.complete_step(2)
 				continue
 
-			self.compute_candidates()
+			if self.candidates_outdated:
+				self.compute_candidates()
+				self.candidates_outdated = False
 
 			# Fill squares that have only one candidate number (all other numbers are already in the same row/column/box)
 			if self.fill_squares_with_one_candidate():
-				self.max_difficulty = max(self.max_difficulty, 3)
-				print("Difficulty: 3")
+				self.complete_step(3)
 				continue
 
 			# Backup the candidates grid to use for explanations.
@@ -409,33 +410,21 @@ class Sudoku(QObject):
 			eliminations_count = self.eliminate_candidates()
 			if eliminations_count != 0:
 				print(f"Removed {eliminations_count} candidates by elimination.")
-
-			# Fill squares that have only one candidate after eliminations.
-			if self.fill_squares_with_one_candidate("Eliminations"):
-				self.max_difficulty = max(self.max_difficulty, 4)
-				print("Difficulty: 4")
+				self.complete_step(4)
 				continue
 
 			self.notes["Subsets"] = []
 			subsets_count = self.create_disjoint_subsets()
 			if subsets_count != 0:
 				print(f"Created {subsets_count} disjoint subsets.")
-
-			# Fill squares that have only one candidate after groups have been formed.
-			if self.fill_squares_with_one_candidate("Subsets"):
-				self.max_difficulty = max(self.max_difficulty, 4)
-				print("Difficulty: 5")
+				self.complete_step(5)
 				continue
 
 			self.notes["Groups"] = []
 			groups_count = self.create_groups_with_same_candidates()
 			if groups_count != 0:
 				print(f"Created {groups_count} groups.")
-
-			# Fill squares that have only one candidate after groups have been formed.
-			if self.fill_squares_with_one_candidate("Groups"):
-				self.max_difficulty = max(self.max_difficulty, 4)
-				print("Difficulty: 6")
+				self.complete_step(6)
 				continue
 
 			self.solve_failed = True
@@ -443,6 +432,12 @@ class Sudoku(QObject):
 
 		print_grid(self.grid)
 		return True
+
+	def complete_step(self, difficulty, set_candidates_outdated=True):
+		self.max_difficulty = max(self.max_difficulty, difficulty)
+		print(f"Difficulty: {difficulty}")
+		if set_candidates_outdated:
+			self.candidates_outdated = True
 
 	def fill_single_empty_squares(self):
 		for sequence in self.get_all_sequences():
