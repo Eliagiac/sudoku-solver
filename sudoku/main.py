@@ -579,16 +579,25 @@ class Sudoku(QObject):
 							continue
 
 						candidates_shown = []
-						for row in self.candidates:
-							for column, candidates in enumerate(row):
-								if (row, column) in other_sequence_positions:
-									candidates_shown.append(candidates)
+						for i, row in enumerate(self.candidates):
+							new_row = []
+							for j, candidates in enumerate(row):
+								if [i, j] in other_sequence_positions:
+									# Show only the number being eliminated
+									if [i, j] in possible_squares:
+										new_row.append([n])
+									else:
+										new_row.append(candidates.copy())
+								else:
+									new_row.append([])
+							candidates_shown.append(new_row)
 
 						red_candidates_shown = []
-						for row in self.notes["Candidates"]:
-							for column, candidates in enumerate(row):
-								if (row, column) in other_sequence_positions:
-									red_candidates_shown.append(candidates - candidates_shown[row][column])
+						for i, row in enumerate(self.notes["Candidates"]):
+							new_row = []
+							for j, candidates in enumerate(row):
+								new_row.append([n] if [i, j] in affected_squares else [])
+							red_candidates_shown.append(new_row)
 
 						self.explanations.append(Explanation(
 							f"Removed {eliminations_count} candidates from elimination.",
