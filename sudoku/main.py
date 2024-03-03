@@ -14,6 +14,9 @@ grid_margin_size = [9, 9]
 
 time_between_steps = 0.05
 
+showing_previous_difference = False
+showing_all_candidates = False
+
 
 class GridBackgroundWidget(QWidget):
 	box_size = 3
@@ -163,6 +166,9 @@ class Square:
 	def __str__(self):
 		return str(self.n)
 
+	def __repr__(self):
+		return str(self.n)
+
 	# For simplicity, equality between a square and an int is supported
 	def __eq__(self, other):
 		if type(other) is int:
@@ -233,6 +239,7 @@ class Sudoku(QObject):
 	# Stores the grid state after each step.
 	steps = []
 	explanations = []
+	candidates_history = []
 
 	current_step = 0
 
@@ -255,7 +262,7 @@ class Sudoku(QObject):
 		self.box_size = box_size
 		self.grid_size = box_size ** 2
 
-		self.all_possible_numbers = range(1, self.grid_size + 1)
+		self.all_possible_numbers = list(range(1, self.grid_size + 1))
 
 		self.initial_rows = rows
 
@@ -318,7 +325,7 @@ class Sudoku(QObject):
 
 	# Checks whether any row/column/box contains two or more of the same number, except for 0.
 	def is_valid(self):
-		for sequence in self.get_all_sequences():
+		for i, sequence in enumerate(self.get_all_sequences()):
 			if any(sequence.count(n) > 1 for n in self.all_possible_numbers):
 				return False
 
@@ -348,10 +355,6 @@ class Sudoku(QObject):
 		self.total_steps = 0
 		self.compute_candidates()
 		while any(square.is_empty() for row in self.grid for square in row):
-			if not self.is_valid():
-				print("Error occurred while solving.")
-				return False
-
 			self.total_steps += 1
 			if self.total_steps >= max_tries:
 				self.solve_failed = True
@@ -360,6 +363,7 @@ class Sudoku(QObject):
 			print_grid(self.grid)
 			self.current_step += 1
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
+			self.candidates_history.append([[self.candidates[i][j].copy() for j in range(self.grid_size)] for i in range(self.grid_size)])
 
 			if self.update_gui:
 				self.step_done.emit()
@@ -373,6 +377,10 @@ class Sudoku(QObject):
 			# Wait for an unpause command.
 			while self.paused:
 				time.sleep(0.01)
+
+			if not self.is_valid():
+				print("Error occurred while solving.")
+				return False
 
 			# Fill squares that are the only empty square in a row/column/box.
 			if self.fill_single_empty_squares():
@@ -641,12 +649,18 @@ class Sudoku(QObject):
 				# If there's as many squares in the subset as there are shared candidates, it's certain that
 				# all squares involved will contain one of these numbers, so other candidates can be removed.
 				if len(subset) == len(subset_candidates):
+					candidates_shown = [[[] for j in self.candidates] for i in self.candidates]
+					red_candidates_shown = [[[] for j in self.candidates] for i in self.candidates]
+
 					# Note: the excess candidates are also removed from the current square, included in subset.
 					for other_pos in subset:
+						candidates_shown[other_pos[0]][other_pos[1]] = self.candidates[other_pos[0]][other_pos[1]][:len(subset_candidates)]
+						red_candidates_shown[other_pos[0]][other_pos[1]] = self.candidates[other_pos[0]][other_pos[1]][len(subset_candidates):]
 						del self.candidates[other_pos[0]][other_pos[1]][len(subset_candidates):]
 
 					self.explanations.append(Explanation(
-						f"Removed candidates using disjoint subsets."
+						f"Removed candidates using disjoint subsets.", affected_sequence=sequence,
+						candidates=candidates_shown, candidates_red=red_candidates_shown
 					))
 
 					return True
@@ -688,7 +702,7 @@ class Sudoku(QObject):
 						continue
 
 					self.explanations.append(Explanation(
-						f"Removed candidates using disjoint subsets."
+						f"Removed candidates using candidate groups."
 					))
 
 					return True
@@ -845,10 +859,14 @@ def show_candidates(candidates, candidates_red=None):
 	return candidates_widget
 
 
-def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True):
+def update_grid_layout(current_step=-1, show_previous_difference=False, show_explanations=True, show_all_candidates=False):
 	# Only update the UI if we are in a step-by-step solution
 	if not sudoku.pause_between_steps:
 		return
+
+	global showing_previous_difference, showing_all_candidates
+	showing_previous_difference = show_previous_difference
+	showing_all_candidates = show_all_candidates
 
 	clear_grid_layout()
 
@@ -884,7 +902,13 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 
 			grid_layout.addWidget(label, i, j)
 
-	if explanation.candidates is not None and len(explanation.candidates) > 0:
+	if show_all_candidates and sudoku.candidates is not None:
+		for i in range(sudoku.grid_size):
+			for j in range(sudoku.grid_size):
+				grid_layout.addWidget(show_candidates(
+					sudoku.candidates[i][j]), i, j)
+
+	elif explanation.candidates is not None and len(explanation.candidates) > 0:
 		for i in range(sudoku.grid_size):
 			for j in range(sudoku.grid_size):
 				has_red_candidates = explanation.candidates_red is not None and len(explanation.candidates_red[i][j]) > 0
@@ -1007,6 +1031,16 @@ def toggle_calculating_solution(calculating=False):
 	show_solution_button.setText("Calculating solution..." if calculating else "Show solution")
 
 
+def toggle_show_all_candidates():
+	if not showing_all_candidates:
+		show_candidates_button.setText("Hide candidates")
+		update_grid_layout(sudoku.current_step, showing_previous_difference, show_all_candidates=True)
+
+	else:
+		show_candidates_button.setText("Show candidates")
+		update_grid_layout(sudoku.current_step, showing_previous_difference, show_all_candidates=False)
+
+
 def toggle_paused(force_pause=False):
 	if not sudoku.paused or force_pause:
 		sudoku.paused = True
@@ -1033,6 +1067,7 @@ def previous_step():
 
 	sudoku.current_step -= 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
+	sudoku.candidates = sudoku.candidates_history[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
 
 
@@ -1052,6 +1087,7 @@ def next_step():
 	else:
 		sudoku.current_step += 1
 		sudoku.grid = sudoku.steps[sudoku.current_step]
+		sudoku.candidates = sudoku.candidates_history[sudoku.current_step]
 		update_grid_layout(sudoku.current_step, True)
 
 
@@ -1063,6 +1099,7 @@ def jump_to_start():
 
 	sudoku.current_step = 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
+	sudoku.candidates = sudoku.candidates_history[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
 
 
@@ -1074,6 +1111,7 @@ def jump_to_end():
 
 	sudoku.current_step = len(sudoku.steps) - 1
 	sudoku.grid = sudoku.steps[sudoku.current_step]
+	sudoku.candidates = sudoku.candidates_history[sudoku.current_step]
 	update_grid_layout(sudoku.current_step, True)
 
 
@@ -1118,10 +1156,15 @@ show_solution_button.setText("Show solution")
 show_solution_button.clicked.connect(show_solution)
 main_window_layout.addWidget(show_solution_button, 2, 0)
 
+show_candidates_button = QPushButton()
+show_candidates_button.setText("Show candidates")
+show_candidates_button.clicked.connect(toggle_show_all_candidates)
+main_window_layout.addWidget(show_candidates_button, 3, 0)
+
 navigation_widget = QWidget()
 navigation_layout = QGridLayout()
 navigation_widget.setLayout(navigation_layout)
-main_window_layout.addWidget(navigation_widget, 3, 0)
+main_window_layout.addWidget(navigation_widget, 4, 0)
 
 jump_to_start_button = QPushButton()
 jump_to_start_button.setIcon(QIcon("icons//left-jump.png"))
