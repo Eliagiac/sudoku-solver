@@ -274,6 +274,7 @@ class Sudoku(QObject):
 		self.compute_candidates()
 
 		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
+		self.candidates_history.append([[candidates.copy() for candidates in row] for row in self.candidates])
 		self.explanations.append(Explanation("Loaded puzzle."))
 
 	def reset_gui_settings(self):
@@ -341,6 +342,7 @@ class Sudoku(QObject):
 		if self.is_solved:
 			self.current_step += 1
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
+			self.candidates_history.append([[candidates.copy() for candidates in row] for row in self.candidates])
 			self.explanations.append(Explanation(f"Puzzle is solved. (Max difficulty: {self.max_difficulty})"))
 
 		else:
@@ -629,6 +631,61 @@ class Sudoku(QObject):
 
 		return False
 
+	# If [0, 0] and [0, 1] definitely contain either a 1 or a 2, no other squares in the first row and the first box
+	# can have a 1 or a 2. For this to be true, the number of squares affected must equal the amount of numbers used.
+	def create_groups_with_same_candidates(self):
+		for sequence in self.get_all_sequences():
+			positions = empty_squares(sequence)
+			for i, pos in enumerate(positions):
+				candidates = self.candidates[pos[0]][pos[1]]
+				if len(candidates) < 2:
+					continue
+
+				candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
+				red_candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
+
+				candidates_shown[pos[0]][pos[1]] = list(candidates)
+
+				group = [pos]
+
+				for other_pos in positions[i+1:]:
+					other_candidates = self.candidates[other_pos[0]][other_pos[1]]
+
+					if other_candidates == candidates:
+						group.append(other_pos)
+
+						candidates_shown[other_pos[0]][other_pos[1]] = list(other_candidates)
+
+				# If there's as many items in the group as there are candidates in each square,
+				# we've exhausted the locations these numbers could go in.
+				if len(group) == len(candidates):
+					affected_squares = []
+					for other_pos in positions:
+						if other_pos in group:
+							continue
+
+						candidates_shown[other_pos[0]][other_pos[1]] = list(self.candidates[other_pos[0]][other_pos[1]])
+
+						for candidate in candidates:
+							if candidate in self.candidates[other_pos[0]][other_pos[1]]:
+								self.candidates[other_pos[0]][other_pos[1]].remove(candidate)
+								affected_squares.append(other_pos)
+
+								candidates_shown[other_pos[0]][other_pos[1]].remove(candidate)
+								red_candidates_shown[other_pos[0]][other_pos[1]].append(candidate)
+
+					if len(affected_squares) == 0:
+						continue
+
+					self.explanations.append(Explanation(
+						f"Removed candidates using candidate groups.", affected_sequence=sequence,
+						candidates=candidates_shown, candidates_red=red_candidates_shown
+					))
+
+					return True
+
+		return False
+
 	# If a set of numbers share the same possible squares, and the set is as big as the
 	# amount of squares involved, we can assume those squares may not contain other numbers.
 	def create_disjoint_subsets(self):
@@ -702,61 +759,6 @@ class Sudoku(QObject):
 
 					self.explanations.append(Explanation(
 						f"Removed candidates using disjoint subsets.", affected_sequence=sequence,
-						candidates=candidates_shown, candidates_red=red_candidates_shown
-					))
-
-					return True
-
-		return False
-
-	# If [0, 0] and [0, 1] definitely contain either a 1 or a 2, no other squares in the first row and the first box
-	# can have a 1 or a 2. For this to be true, the number of squares affected must equal the amount of numbers used.
-	def create_groups_with_same_candidates(self):
-		for sequence in self.get_all_sequences():
-			positions = empty_squares(sequence)
-			for i, pos in enumerate(positions):
-				candidates = self.candidates[pos[0]][pos[1]]
-				if len(candidates) < 2:
-					continue
-
-				candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
-				red_candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
-
-				candidates_shown[pos[0]][pos[1]] = list(candidates)
-
-				group = [pos]
-
-				for other_pos in positions[i+1:]:
-					other_candidates = self.candidates[other_pos[0]][other_pos[1]]
-
-					if other_candidates == candidates:
-						group.append(other_pos)
-
-						candidates_shown[other_pos[0]][other_pos[1]] = list(other_candidates)
-
-				# If there's as many items in the group as there are candidates in each square,
-				# we've exhausted the locations these numbers could go in.
-				if len(group) == len(candidates):
-					affected_squares = []
-					for other_pos in positions:
-						if other_pos in group:
-							continue
-
-						candidates_shown[other_pos[0]][other_pos[1]] = list(self.candidates[other_pos[0]][other_pos[1]])
-
-						for candidate in candidates:
-							if candidate in self.candidates[other_pos[0]][other_pos[1]]:
-								self.candidates[other_pos[0]][other_pos[1]].remove(candidate)
-								affected_squares.append(other_pos)
-
-								candidates_shown[other_pos[0]][other_pos[1]].remove(candidate)
-								red_candidates_shown[other_pos[0]][other_pos[1]].append(candidate)
-
-					if len(affected_squares) == 0:
-						continue
-
-					self.explanations.append(Explanation(
-						f"Removed candidates using candidate groups.", affected_sequence=sequence,
 						candidates=candidates_shown, candidates_red=red_candidates_shown
 					))
 
