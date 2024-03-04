@@ -527,7 +527,12 @@ class Sudoku(QObject):
 					self.candidates[pos[0]][pos[1]].add(n)
 
 	def update_candidates(self):
-		for pos in empty_squares([square for row in self.get_rows() for square in row]):
+		for pos in [square.pos for row in self.get_rows() for square in row]:
+			# If the square was filled remove all candidates.
+			if self.grid[pos[0]][pos[1]] != 0:
+				self.candidates[pos[0]][pos[1]] = []
+
+			# Remove any candidates that could no longer go on the square.
 			for n in self.candidates[pos[0]][pos[1]].copy():
 				if not self.could_contain(pos[0], pos[1], n):
 					self.candidates[pos[0]][pos[1]].remove(n)
