@@ -406,9 +406,9 @@ class Sudoku(QObject):
 				self.complete_step(4)
 				continue
 
-			#if self.create_disjoint_subsets():
-			#	self.complete_step(5)
-			#	continue
+			if self.create_disjoint_subsets():
+				self.complete_step(5)
+				continue
 
 			if self.create_groups_with_same_candidates():
 				self.complete_step(6)
@@ -635,36 +635,51 @@ class Sudoku(QObject):
 				subset = [pos]
 				subset_candidates = []
 
-				# Need to check for any intersection, not just the first n items.
-				for n in range(2, len(candidates)):
-					for other_pos in positions[i+1:]:
-						other_candidates = self.candidates[other_pos[0]][other_pos[1]]
+				# Attempt an intersection with any combination of the other empty squares.
+				# If any of the intersections has as many candidates as its size, it will be selected as a disjoint subset.
+				other_squares = positions.copy()
+				other_squares.remove(pos)
+				for mask in range(1, 2 ** len(other_squares)):
+					# Select which squares to intersect with using a bitmask.
+					subset += [other_squares[j] for j in range(len(other_squares)) if (1 << j) & mask]
 
-						if other_candidates[:n] == candidates[:n]:
-							subset.append(other_pos)
-							subset_candidates = candidates[:n]
+					# Try to intersect the candidates of the selected squares.
+					candidates_intersection = set.intersection(*[self.candidates[other_pos[0]][other_pos[1]] for other_pos in subset])
 
-					if len(subset_candidates) != 0:
+					# If there's as many squares in the subset as there are shared candidates, it's certain that
+					# all squares involved will contain one of these numbers, so other candidates can be removed.
+					if len(candidates_intersection) == len(subset):
+						subset_candidates = candidates_intersection
 						break
 
-				# If there's as many squares in the subset as there are shared candidates, it's certain that
-				# all squares involved will contain one of these numbers, so other candidates can be removed.
-				if len(subset) == len(subset_candidates):
+					# If the subset is not valid, reset it and continue with the next combination.
+					subset = [pos]
+
+				# If a valid subset was found, remove all other candidates from the squares involved.
+				if len(subset) > 1:
+					eliminations = 0
+
 					candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
 					red_candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
 
 					# Note: the excess candidates are also removed from the current square, included in subset.
 					for other_pos in subset:
-						candidates_shown[other_pos[0]][other_pos[1]] = self.candidates[other_pos[0]][other_pos[1]][:len(subset_candidates)]
-						red_candidates_shown[other_pos[0]][other_pos[1]] = self.candidates[other_pos[0]][other_pos[1]][len(subset_candidates):]
-						del self.candidates[other_pos[0]][other_pos[1]][len(subset_candidates):]
+						eliminations += len(self.candidates[other_pos[0]][other_pos[1]] - subset_candidates)
+
+						candidates_shown[other_pos[0]][other_pos[1]] = list(subset_candidates)
+						red_candidates_shown[other_pos[0]][other_pos[1]] = list(
+							self.candidates[other_pos[0]][other_pos[1]] - subset_candidates)
+
+						# Remove other candidates from the square.
+						self.candidates[other_pos[0]][other_pos[1]] = subset_candidates.copy()
 
 					self.explanations.append(Explanation(
 						f"Removed candidates using disjoint subsets.", affected_sequence=sequence,
 						candidates=candidates_shown, candidates_red=red_candidates_shown
 					))
 
-					return True
+					# Only return true if any candidates were removed.
+					return eliminations > 0
 
 		return False
 
