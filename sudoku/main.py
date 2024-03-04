@@ -701,6 +701,11 @@ class Sudoku(QObject):
 				if len(candidates) < 2:
 					continue
 
+				candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
+				red_candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
+
+				candidates_shown[pos[0]][pos[1]] = list(candidates)
+
 				group = [pos]
 
 				for other_pos in positions[i+1:]:
@@ -708,6 +713,8 @@ class Sudoku(QObject):
 
 					if other_candidates == candidates:
 						group.append(other_pos)
+
+						candidates_shown[other_pos[0]][other_pos[1]] = list(other_candidates)
 
 				# If there's as many items in the group as there are candidates in each square,
 				# we've exhausted the locations these numbers could go in.
@@ -717,16 +724,22 @@ class Sudoku(QObject):
 						if other_pos in group:
 							continue
 
+						candidates_shown[other_pos[0]][other_pos[1]] = list(self.candidates[other_pos[0]][other_pos[1]])
+
 						for candidate in candidates:
 							if candidate in self.candidates[other_pos[0]][other_pos[1]]:
 								self.candidates[other_pos[0]][other_pos[1]].remove(candidate)
 								affected_squares.append(other_pos)
 
+								candidates_shown[other_pos[0]][other_pos[1]].remove(candidate)
+								red_candidates_shown[other_pos[0]][other_pos[1]].append(candidate)
+
 					if len(affected_squares) == 0:
 						continue
 
 					self.explanations.append(Explanation(
-						f"Removed candidates using candidate groups."
+						f"Removed candidates using candidate groups.", affected_sequence=sequence,
+						candidates=candidates_shown, candidates_red=red_candidates_shown
 					))
 
 					return True
