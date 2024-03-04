@@ -409,11 +409,11 @@ class Sudoku(QObject):
 				self.complete_step(4)
 				continue
 
-			if self.create_disjoint_subsets():
+			if self.create_groups_with_same_candidates():
 				self.complete_step(5)
 				continue
 
-			if self.create_groups_with_same_candidates():
+			if self.create_disjoint_subsets():
 				self.complete_step(6)
 				continue
 
@@ -522,7 +522,7 @@ class Sudoku(QObject):
 	# Note: this function always stores the candidates in order from lowest to highest.
 	def compute_candidates(self):
 		# Populate the candidates grid with empty lists of candidates on each row.
-		self.candidates = [[set() for j in range(self.grid_size)] for i in range(self.grid_size)]
+		self.candidates = [[set() for _ in range(self.grid_size)] for _ in range(self.grid_size)]
 
 		for pos in empty_squares([square for row in self.get_rows() for square in row]):
 			for n in self.all_possible_numbers:
@@ -654,8 +654,9 @@ class Sudoku(QObject):
 					# Try to intersect the candidates of the selected squares.
 					candidates_intersection = set.intersection(*[self.candidates[other_pos[0]][other_pos[1]] for other_pos in subset])
 
-					# If there's as many squares in the subset as there are shared candidates, it's certain that
+					# If there's as many squares in the subset as there are shared candidates, it's certain* that
 					# all squares involved will contain one of these numbers, so other candidates can be removed.
+					# *there needs to be one last verification step to make sure those numbers couldn't go anywhere else.
 					if len(candidates_intersection) == len(subset):
 						subset_candidates = candidates_intersection
 
@@ -668,10 +669,21 @@ class Sudoku(QObject):
 
 				# If a valid subset was found, remove all other candidates from the squares involved.
 				if len(subset) > 1:
+					verification_failed = False
+					# First verify that the candidates in the subset cannot be placed anywhere else in the sequence.
+					for other_pos in positions:
+						if other_pos not in subset:
+							if self.candidates[other_pos[0]][other_pos[1]] & subset_candidates:
+								verification_failed = True
+								break
+
+					if verification_failed:
+						continue
+
 					eliminations = 0
 
-					candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
-					red_candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
+					candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
+					red_candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
 
 					# Note: the excess candidates are also removed from the current square, included in subset.
 					for other_pos in subset:
@@ -684,9 +696,9 @@ class Sudoku(QObject):
 						# Remove other candidates from the square.
 						self.candidates[other_pos[0]][other_pos[1]] = subset_candidates.copy()
 
-					# Return early if no candidates were removed.
+					# Don't complete the step if no candidates were removed.
 					if eliminations == 0:
-						return False
+						continue
 
 					self.explanations.append(Explanation(
 						f"Removed candidates using disjoint subsets.", affected_sequence=sequence,
@@ -707,8 +719,8 @@ class Sudoku(QObject):
 				if len(candidates) < 2:
 					continue
 
-				candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
-				red_candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
+				candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
+				red_candidates_shown = [[[] for _ in range(self.grid_size)] for _ in range(self.grid_size)]
 
 				candidates_shown[pos[0]][pos[1]] = list(candidates)
 
