@@ -363,7 +363,7 @@ class Sudoku(QObject):
 			print_grid(self.grid)
 			self.current_step += 1
 			self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
-			self.candidates_history.append([[self.candidates[i][j].copy() for j in range(self.grid_size)] for i in range(self.grid_size)])
+			self.candidates_history.append([[candidates.copy() for candidates in row] for row in self.candidates])
 
 			if self.update_gui:
 				self.step_done.emit()
@@ -406,9 +406,9 @@ class Sudoku(QObject):
 				self.complete_step(4)
 				continue
 
-			if self.create_disjoint_subsets():
-				self.complete_step(5)
-				continue
+			#if self.create_disjoint_subsets():
+			#	self.complete_step(5)
+			#	continue
 
 			if self.create_groups_with_same_candidates():
 				self.complete_step(6)
@@ -519,16 +519,16 @@ class Sudoku(QObject):
 	# Note: this function always stores the candidates in order from lowest to highest.
 	def compute_candidates(self):
 		# Populate the candidates grid with empty lists of candidates on each row.
-		self.candidates = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
+		self.candidates = [[set() for j in range(self.grid_size)] for i in range(self.grid_size)]
 
 		for pos in empty_squares([square for row in self.get_rows() for square in row]):
 			for n in self.all_possible_numbers:
 				if self.could_contain(pos[0], pos[1], n):
-					self.candidates[pos[0]][pos[1]].append(n)
+					self.candidates[pos[0]][pos[1]].add(n)
 
 	def update_candidates(self):
 		for pos in empty_squares([square for row in self.get_rows() for square in row]):
-			for n in self.candidates[pos[0]][pos[1]]:
+			for n in self.candidates[pos[0]][pos[1]].copy():
 				if not self.could_contain(pos[0], pos[1], n):
 					self.candidates[pos[0]][pos[1]].remove(n)
 
@@ -537,7 +537,7 @@ class Sudoku(QObject):
 			candidates = self.candidates[pos[0]][pos[1]]
 
 			if len(candidates) == 1:
-				n = candidates[0]
+				n = list(candidates)[0]
 				self.set_square(pos, n)
 
 				circled_squares = []
@@ -598,7 +598,7 @@ class Sudoku(QObject):
 									if [i, j] in possible_squares:
 										new_row.append([n])
 									else:
-										new_row.append(candidates.copy())
+										new_row.append(list(candidates))
 								else:
 									new_row.append([])
 							candidates_shown.append(new_row)
@@ -635,6 +635,7 @@ class Sudoku(QObject):
 				subset = [pos]
 				subset_candidates = []
 
+				# Need to check for any intersection, not just the first n items.
 				for n in range(2, len(candidates)):
 					for other_pos in positions[i+1:]:
 						other_candidates = self.candidates[other_pos[0]][other_pos[1]]
@@ -649,8 +650,8 @@ class Sudoku(QObject):
 				# If there's as many squares in the subset as there are shared candidates, it's certain that
 				# all squares involved will contain one of these numbers, so other candidates can be removed.
 				if len(subset) == len(subset_candidates):
-					candidates_shown = [[[] for j in self.candidates] for i in self.candidates]
-					red_candidates_shown = [[[] for j in self.candidates] for i in self.candidates]
+					candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
+					red_candidates_shown = [[[] for j in range(self.grid_size)] for i in range(self.grid_size)]
 
 					# Note: the excess candidates are also removed from the current square, included in subset.
 					for other_pos in subset:
