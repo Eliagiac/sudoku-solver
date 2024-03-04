@@ -658,6 +658,9 @@ class Sudoku(QObject):
 					# all squares involved will contain one of these numbers, so other candidates can be removed.
 					if len(candidates_intersection) == len(subset):
 						subset_candidates = candidates_intersection
+
+						# Any given square can only be part of at most 1 disjoint subset,
+						# so there's no need to try other combinations.
 						break
 
 					# If the subset is not valid, reset it and continue with the next combination.
@@ -681,13 +684,16 @@ class Sudoku(QObject):
 						# Remove other candidates from the square.
 						self.candidates[other_pos[0]][other_pos[1]] = subset_candidates.copy()
 
+					# Return early if no candidates were removed.
+					if eliminations == 0:
+						return False
+
 					self.explanations.append(Explanation(
 						f"Removed candidates using disjoint subsets.", affected_sequence=sequence,
 						candidates=candidates_shown, candidates_red=red_candidates_shown
 					))
 
-					# Only return true if any candidates were removed.
-					return eliminations > 0
+					return True
 
 		return False
 
