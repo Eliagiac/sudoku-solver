@@ -269,6 +269,10 @@ class Sudoku(QObject):
 		for row_index, row in enumerate(rows):
 			self.grid.append([Square([row_index, square_index], n) for square_index, n in enumerate(row)])
 
+		# Compute the initial candidates during initialization.
+		# These will be updated dynamically as needed using update_candidates.
+		self.compute_candidates()
+
 		self.steps.append([[Square(s.pos, s.n) for s in row] for row in self.grid])
 		self.explanations.append(Explanation("Loaded puzzle."))
 
@@ -353,7 +357,6 @@ class Sudoku(QObject):
 
 	def solve(self):
 		self.total_steps = 0
-		self.compute_candidates()
 		while any(square.is_empty() for row in self.grid for square in row):
 			self.total_steps += 1
 			if self.total_steps >= max_tries:
