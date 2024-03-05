@@ -631,7 +631,10 @@ class Sudoku(QObject):
 
 		return False
 
-	# If [0, 0] and [0, 1] definitely contain either a 1 or a 2, no other squares in the first row and the first box
+	# If multiple squares share the same candidates and there are as many squares in the group as there
+	# are total candidates involved, these numbers may not go in any other square in the sequence.
+	# This is true even if some squares in the group only have part of the set of candidates.
+	# For example, if [0, 0] and [0, 1] definitely contain either a 1 or a 2, no other squares in the first row
 	# can have a 1 or a 2. For this to be true, the number of squares affected must equal the amount of numbers used.
 	def create_groups_with_same_candidates(self):
 		for sequence in self.get_all_sequences():
@@ -647,18 +650,32 @@ class Sudoku(QObject):
 				candidates_shown[pos[0]][pos[1]] = list(candidates)
 
 				group = [pos]
+				group_candidates = candidates.copy()
 
 				for other_pos in positions[i+1:]:
 					other_candidates = self.candidates[other_pos[0]][other_pos[1]]
 
-					if other_candidates == candidates:
-						group.append(other_pos)
+					is_part_of_group = False
 
+					# The first option is that this square is a superset of all the other squares in the group,
+					# so it has all of their candidates combined and possibly more.
+					if group_candidates <= other_candidates:
+						# Update the superset of all candidates in the group
+						group_candidates = other_candidates.copy()
+						is_part_of_group = True
+
+					# Another option is that this square contains some candidates from the other members of the group,
+					# and no others. In this case it would be a subset of the set of total candidates.
+					elif other_candidates <= group_candidates:
+						is_part_of_group = True
+
+					if is_part_of_group:
+						group.append(other_pos)
 						candidates_shown[other_pos[0]][other_pos[1]] = list(other_candidates)
 
-				# If there's as many items in the group as there are candidates in each square,
+				# If there's as many items in the group as there are total candidates involved,
 				# we've exhausted the locations these numbers could go in.
-				if len(group) == len(candidates):
+				if len(group) == len(group_candidates):
 					affected_squares = []
 					for other_pos in positions:
 						if other_pos in group:
@@ -666,7 +683,7 @@ class Sudoku(QObject):
 
 						candidates_shown[other_pos[0]][other_pos[1]] = list(self.candidates[other_pos[0]][other_pos[1]])
 
-						for candidate in candidates:
+						for candidate in group_candidates:
 							if candidate in self.candidates[other_pos[0]][other_pos[1]]:
 								self.candidates[other_pos[0]][other_pos[1]].remove(candidate)
 								affected_squares.append(other_pos)
