@@ -638,6 +638,7 @@ class Sudoku(QObject):
 	# can have a 1 or a 2. For this to be true, the number of squares affected must equal the amount of numbers used.
 	def create_groups_with_same_candidates(self):
 		for sequence in self.get_all_sequences():
+			print(sequence)
 			positions = empty_squares(sequence)
 			for i, pos in enumerate(positions):
 				candidates = self.candidates[pos[0]][pos[1]]
@@ -652,24 +653,26 @@ class Sudoku(QObject):
 				group = [pos]
 				group_candidates = candidates.copy()
 
+				# The first option is that this square is a superset of all the other squares in the group,
+				# so it has all of their candidates combined and possibly more.
+				# The superset of all the group's candidates must be formed first, before finding smaller subsets.
 				for other_pos in positions[i+1:]:
 					other_candidates = self.candidates[other_pos[0]][other_pos[1]]
 
-					is_part_of_group = False
-
-					# The first option is that this square is a superset of all the other squares in the group,
-					# so it has all of their candidates combined and possibly more.
 					if group_candidates <= other_candidates:
 						# Update the superset of all candidates in the group
 						group_candidates = other_candidates.copy()
-						is_part_of_group = True
 
-					# Another option is that this square contains some candidates from the other members of the group,
-					# and no others. In this case it would be a subset of the set of total candidates.
-					elif other_candidates <= group_candidates:
-						is_part_of_group = True
+						group.append(other_pos)
+						candidates_shown[other_pos[0]][other_pos[1]] = list(other_candidates)
 
-					if is_part_of_group:
+				# Another option is that this square contains some candidates from the other members of the group,
+				# and no others. In this case it would be a subset of the set of total candidates.
+				# To correctly identify these, group_candidates has to be populated first.
+				for other_pos in positions[i+1:]:
+					other_candidates = self.candidates[other_pos[0]][other_pos[1]]
+
+					if other_pos not in group and other_candidates <= group_candidates:
 						group.append(other_pos)
 						candidates_shown[other_pos[0]][other_pos[1]] = list(other_candidates)
 
