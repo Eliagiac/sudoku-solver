@@ -931,7 +931,6 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 	if len(sudoku.explanations) > 1 or (len(sudoku.explanations) == 1 and not show_previous_difference):
 		explanation = sudoku.explanations[current_step-show_previous_difference]
 
-	squares_with_candidates = []
 	if explanation is not None and show_explanations:
 		explanation_label.setText(explanation.text)
 
@@ -949,7 +948,8 @@ def update_grid_layout(current_step=-1, show_previous_difference=False, show_exp
 
 	for i in range(sudoku.grid_size):
 		for j in range(sudoku.grid_size):
-			label = QLabel(str(sudoku.steps[current_step][i][j]))
+			n = sudoku.steps[current_step][i][j]
+			label = QLabel(str(n) if n != 0 else "")
 			label.setFont(QFont('Times', 12))
 			label.setAlignment(Qt.AlignCenter)
 
