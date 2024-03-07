@@ -18,7 +18,7 @@ The solver features both known strategies and ideas that I came up with personal
     git clone https://github.com/Eliagiac/sudoku-solver.git
     ```
 
-2. Install the PyQt5 package by running the following command:
+2. Install the [PyQt5](https://pypi.org/project/PyQt5/) package by running the following command:
 
     ```bash
     pip install PyQt5
