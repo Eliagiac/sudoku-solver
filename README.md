@@ -18,7 +18,13 @@ The solver features both known strategies and ideas that I came up with personal
     git clone https://github.com/Eliagiac/sudoku-solver.git
     ```
 
-2. Navigate to the project directory:
+2. Install the PyQt5 package by running the following command:
+
+    ```bash
+    pip install PyQt5
+    ```
+
+3. Navigate to the project directory:
 
     ```bash
     cd sudoku-solver
@@ -32,17 +38,19 @@ The solver features both known strategies and ideas that I came up with personal
     python sudoku_solver.py
     ```
 
-2. Use the GUI to input a Sudoku puzzle and let the solver work its magic!
+2. In the GUI, click on "Show solution" and let the solver work its magic! <br />
 
-(The solver currently does not accept user inputs, it uses a set of hard-coded puzzles.)
+3. You can then use the navigation buttons to view explanations on the steps required to solve the puzzle. 
+
+*The solver currently does not accept user inputs, it uses a set of example puzzles of varying difficulty.*
 
 ## Roadmap
 
-- Implement more advanced solving techniques.
-- Enhance GUI features and usability.
-- Add explanations and step-by-step walkthroughs of a solution.
-- Add ways to input puzzles manually.
-- Add an option to scan a puzzle grid from a picture.
+- [ ] Implement more advanced solving techniques.
+- [ ] Enhance GUI features and usability.
+- [x] Add explanations and step-by-step walkthroughs of a solution.
+- [ ] Add ways to input puzzles manually.
+- [ ] Add an option to scan a puzzle grid from a picture.
 
 ## License
 
